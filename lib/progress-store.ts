@@ -114,7 +114,7 @@ export function computePhaseProgress(
   completedTasks: string[]
 ): number {
   if (totalTasks === 0) return 0;
-  const done = completedTasks.filter((id) => id.startsWith(`p${phaseId}-`)).length;
+  const done = completedTasks.filter((id) => id.startsWith(`p${phaseId}w`)).length;
   return Math.round((done / totalTasks) * 100);
 }
 

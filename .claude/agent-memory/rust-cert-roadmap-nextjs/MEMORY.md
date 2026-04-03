@@ -1,0 +1,3 @@
+- [Project Overview](project_overview.md) — Blockchain/ZK/Rust/Solana 12-month learning roadmap web app at /Users/user/Desktop/ArdanProject
+- [Tech Stack & Architecture](project_tech_stack.md) — Next.js 16.2.2 + React 19 + Tailwind 4 + Zustand + Recharts + dnd-kit
+- [Build Status](project_build_status.md) — All 9 routes build successfully with 0 TypeScript errors as of 2026-04-03
