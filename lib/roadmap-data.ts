@@ -90,11 +90,184 @@ fn main() {
         ],
         practicePrompt: 'Write a temperature converter: declare Celsius as a const, shadow it to convert to Fahrenheit (F = C * 9/5 + 32), then shadow again to add "°F" string. Print all three.',
       }),
-      makeTask("p1w1d3", 1, 1, 3, "Functions & Control Flow", "Define functions, understand parameters/return types, if/else expressions, loop/while/for, range patterns.", 4, "video", { url: "https://www.udemy.com/course/learn-to-code-with-rust/", label: "Learn to Code with Rust — Section 3", platform: "udemy" }),
-      makeTask("p1w1d4", 1, 1, 4, "Compound Types: Tuples & Arrays", "Tuples vs arrays, destructuring, indexing, slices. Build a temperature converter program.", 4, "coding", { url: "https://doc.rust-lang.org/book/ch03-02-data-types.html", label: "The Rust Book — Ch 3.2", platform: "docs" }),
-      makeTask("p1w1d5", 1, 1, 5, "The Stack & Heap — Mental Model", "Understand how Rust manages memory: stack vs heap, why this matters for ownership. Read Rust Book Ch 4.1.", 4, "reading", { url: "https://doc.rust-lang.org/book/ch04-01-what-is-ownership.html", label: "The Rust Book — Ch 4.1", platform: "docs" }),
-      makeTask("p1w1d6", 1, 1, 6, "Practice: Fibonacci & Prime Sieve", "Implement Fibonacci (iterative + recursive), Sieve of Eratosthenes in Rust. Use cargo test.", 4, "exercise", { url: "https://exercism.org/tracks/rust", label: "Exercism Rust Track", platform: "custom" }),
-      makeTask("p1w1d7", 1, 1, 7, "Week 1 Review & Mini Project", "Build a CLI number guessing game using rand crate. Review all week concepts. Write summary notes.", 4, "project", { url: "https://doc.rust-lang.org/book/ch02-00-guessing-game-tutorial.html", label: "Rust Book — Guessing Game", platform: "docs" }),
+      makeTask("p1w1d3", 1, 1, 3, "Functions & Control Flow", "Define functions, understand parameters/return types, if/else expressions, loop/while/for, range patterns.", 4, "video", { url: "https://www.udemy.com/course/learn-to-code-with-rust/", label: "Learn to Code with Rust — Section 3", platform: "udemy" }, {
+        keyPoints: [
+          'Functions use fn keyword — parameter types and return type are mandatory annotations',
+          'if/else is an expression in Rust — it returns a value (no ternary needed)',
+          'loop creates an infinite loop; break can return a value from loop',
+          'for item in collection is the idiomatic way to iterate — prefer over while with index',
+          'Ranges: 0..5 is exclusive (0-4), 0..=5 is inclusive (0-5)',
+        ],
+        codeExample: `fn add(a: i32, b: i32) -> i32 {
+    a + b  // no semicolon = expression = return value
+}
+
+fn classify(n: i32) -> &'static str {
+    if n > 0 { "positive" }
+    else if n < 0 { "negative" }
+    else { "zero" }
+}
+
+fn main() {
+    let result = add(3, 4);
+    println!("{result}");
+
+    for i in 0..5 {
+        print!("{i} ");   // prints: 0 1 2 3 4
+    }
+
+    let mut count = 0;
+    let x = loop {
+        count += 1;
+        if count == 3 { break count * 10; }
+    };
+    println!("loop returned: {x}"); // 30
+}`,
+        commonMistakes: [
+          'Adding a semicolon after the last expression in a function — that makes it return () not the value',
+          'Using return keyword unnecessarily — Rust returns the last expression implicitly',
+        ],
+        practicePrompt: 'Write a function fizzbuzz(n: u32) -> String that returns "Fizz", "Buzz", "FizzBuzz" or the number as string. Call it in a loop for 1..=20.',
+      }),
+      makeTask("p1w1d4", 1, 1, 4, "Compound Types: Tuples & Arrays", "Tuples vs arrays, destructuring, indexing, slices. Build a temperature converter program.", 4, "coding", { url: "https://doc.rust-lang.org/book/ch03-02-data-types.html", label: "The Rust Book — Ch 3.2", platform: "docs" }, {
+        keyPoints: [
+          'Tuple: fixed-size, mixed types — (i32, f64, bool). Access with .0, .1, .2',
+          'Array: fixed-size, same type — [i32; 5]. Stored on the stack',
+          'Vec<T>: growable array on heap — use when size is unknown at compile time',
+          'Destructuring: let (x, y, z) = my_tuple; let [a, b, ..] = my_array',
+          'Arrays panic at runtime on out-of-bounds — Rust checks bounds unlike C',
+        ],
+        codeExample: `fn main() {
+    // Tuple — mixed types
+    let coords: (f64, f64) = (48.8566, 2.3522); // Paris
+    let (lat, lon) = coords;                       // destructure
+    println!("lat={lat}, lon={lon}");
+
+    // Array — fixed size, same type
+    let primes: [u32; 5] = [2, 3, 5, 7, 11];
+    println!("first prime: {}", primes[0]);
+    println!("count: {}", primes.len());
+
+    // Vec — growable
+    let mut scores: Vec<i32> = vec![90, 85, 92];
+    scores.push(88);
+    println!("avg: {}", scores.iter().sum::<i32>() / scores.len() as i32);
+}`,
+        commonMistakes: [
+          'Using arrays when you need dynamic size — use Vec<T> instead',
+          'Out-of-bounds array access is a runtime panic in Rust — validate indices',
+        ],
+        practicePrompt: 'Create a function that takes an array of 5 test scores [u32; 5] and returns a tuple (min, max, average) — all computed in one pass.',
+      }),
+      makeTask("p1w1d5", 1, 1, 5, "The Stack & Heap — Mental Model", "Understand how Rust manages memory: stack vs heap, why this matters for ownership. Read Rust Book Ch 4.1.", 4, "reading", { url: "https://doc.rust-lang.org/book/ch04-01-what-is-ownership.html", label: "The Rust Book — Ch 4.1", platform: "docs" }, {
+        keyPoints: [
+          'Stack: LIFO, fast, fixed-size data — integers, booleans, arrays, structs of these',
+          'Heap: dynamic size, slower, managed via pointers — String, Vec<T>, Box<T>',
+          'When a stack frame ends, its data is automatically freed (dropped)',
+          'Heap data is freed when its owner goes out of scope — no GC needed',
+          'String is heap-allocated; &str is a reference to string data (stack pointer + length)',
+        ],
+        codeExample: `fn main() {
+    // Stack-allocated: copied when assigned
+    let x: i32 = 5;
+    let y = x;          // copy: x and y are independent
+    println!("{x} {y}"); // both work fine
+
+    // Heap-allocated: moved when assigned
+    let s1 = String::from("hello");
+    let s2 = s1;        // s1 is MOVED into s2
+    // println!("{s1}"); // ERROR: s1 is invalid after move
+    println!("{s2}");   // ok
+
+    // Clone explicitly if you need both
+    let a = String::from("world");
+    let b = a.clone();  // deep copy on heap
+    println!("{a} {b}"); // both valid
+}`,
+        commonMistakes: [
+          'Expecting String to behave like i32 (copy) — String moves by default',
+          'Not understanding that &str is a borrow (reference) while String is owned heap data',
+        ],
+        practicePrompt: 'Draw a memory diagram: create a String, assign it to another variable (observe move), then clone it. Add annotations for what lives on stack vs heap.',
+      }),
+      makeTask("p1w1d6", 1, 1, 6, "Practice: Fibonacci & Prime Sieve", "Implement Fibonacci (iterative + recursive), Sieve of Eratosthenes in Rust. Use cargo test.", 4, "exercise", { url: "https://exercism.org/tracks/rust", label: "Exercism Rust Track", platform: "custom" }, {
+        keyPoints: [
+          'Recursive functions in Rust work fine but can stack-overflow on deep recursion',
+          'Iterative solutions often faster — use mutable variables and loops',
+          '#[test] attribute marks a function as a unit test',
+          'assert_eq!(expected, actual) is the primary test assertion macro',
+          'cargo test runs all #[test] functions automatically',
+        ],
+        codeExample: `fn fibonacci(n: u64) -> u64 {
+    match n {
+        0 => 0,
+        1 => 1,
+        _ => {
+            let (mut a, mut b) = (0u64, 1u64);
+            for _ in 2..=n {
+                let c = a + b;
+                a = b;
+                b = c;
+            }
+            b
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_fibonacci() {
+        assert_eq!(fibonacci(0), 0);
+        assert_eq!(fibonacci(10), 55);
+        assert_eq!(fibonacci(20), 6765);
+    }
+}`,
+        commonMistakes: [
+          'Integer overflow with u32 at fib(47) — use u64 for Fibonacci sequences',
+          'Forgetting #[cfg(test)] module wrapper — tests run in a separate module',
+        ],
+        practicePrompt: 'Implement both recursive and iterative Fibonacci. Add cargo benchmark (criterion) to compare their performance at n=40.',
+      }),
+      makeTask("p1w1d7", 1, 1, 7, "Week 1 Review & Mini Project", "Build a CLI number guessing game using rand crate. Review all week concepts. Write summary notes.", 4, "project", { url: "https://doc.rust-lang.org/book/ch02-00-guessing-game-tutorial.html", label: "Rust Book — Guessing Game", platform: "docs" }, {
+        keyPoints: [
+          'Add dependencies to Cargo.toml under [dependencies] — cargo handles downloading',
+          'use std::io to read user input; io::stdin().read_line() reads into a String',
+          'trim() removes newline from input; parse() converts String to number',
+          'Ordering enum: Ordering::Less, Greater, Equal for comparison results',
+          'loop + break creates a "play until correct" game loop',
+        ],
+        codeExample: `use std::io;
+use std::cmp::Ordering;
+use rand::Rng;
+
+fn main() {
+    let secret = rand::thread_rng().gen_range(1..=100);
+    println!("Guess the number (1-100)!");
+
+    loop {
+        let mut guess = String::new();
+        io::stdin().read_line(&mut guess).expect("Failed to read");
+        let guess: u32 = match guess.trim().parse() {
+            Ok(n) => n,
+            Err(_) => { println!("Please enter a number!"); continue; }
+        };
+
+        match guess.cmp(&secret) {
+            Ordering::Less    => println!("Too small!"),
+            Ordering::Greater => println!("Too big!"),
+            Ordering::Equal   => { println!("You win!"); break; }
+        }
+    }
+}`,
+        commonMistakes: [
+          'Shadowing guess from String to u32 using let guess: u32 = ... is intentional pattern',
+          'parse() returns Result — always handle the Err case to avoid panics',
+        ],
+        practicePrompt: 'Extend the guessing game: track number of attempts, show "You got it in X tries!", add difficulty levels (easy=1-20, hard=1-1000).',
+      }),
     ],
   },
   {
@@ -105,13 +278,273 @@ fn main() {
     goal: "Master Rust's core memory model: ownership rules, borrowing, references, and slices.",
     isCompleted: false,
     tasks: [
-      makeTask("p1w2d1", 1, 2, 1, "Ownership Rules Deep Dive", "The 3 ownership rules. Move semantics, Copy trait. Why String vs &str. Work through Rust Book Ch 4.1–4.2.", 4, "reading", { url: "https://doc.rust-lang.org/book/ch04-01-what-is-ownership.html", label: "Rust Book — Ownership", platform: "docs" }),
-      makeTask("p1w2d2", 1, 2, 2, "References & Borrowing", "Immutable vs mutable references, the borrow checker rules, dangling references. Practice fixing borrow errors.", 4, "video", { url: "https://www.udemy.com/course/learn-to-code-with-rust/", label: "Learn to Code with Rust — Borrowing", platform: "udemy" }),
-      makeTask("p1w2d3", 1, 2, 3, "Slices: &str and &[T]", "String slices, array slices, slice syntax. Understand why slices are safer than indices.", 4, "coding", { url: "https://doc.rust-lang.org/book/ch04-03-slices.html", label: "Rust Book — Slices", platform: "docs" }),
-      makeTask("p1w2d4", 1, 2, 4, "String Types: String vs &str", "Heap-allocated String, string literals, String methods, format! macro, string concatenation. Build string manipulation exercises.", 4, "coding", { url: "https://www.udemy.com/course/learn-to-code-with-rust/", label: "Learn to Code with Rust — Strings", platform: "udemy" }),
-      makeTask("p1w2d5", 1, 2, 5, "Clone vs Copy — Understanding the Trait", "Why some types implement Copy (stack-only) vs Clone (heap types). Derive macros: #[derive(Clone, Copy)].", 4, "video", { url: "https://www.udemy.com/course/learn-to-code-with-rust/", label: "Learn to Code with Rust", platform: "udemy" }),
-      makeTask("p1w2d6", 1, 2, 6, "Borrow Checker Practice — Fix the Errors", "15 intentionally broken programs. Fix each borrow error. Understand compiler messages.", 4, "exercise", { url: "https://github.com/rust-lang/rustlings", label: "Rustlings Exercises", platform: "github" }),
-      makeTask("p1w2d7", 1, 2, 7, "Week 2 Project: Word Counter CLI", "Build a word-count tool that reads a file, returns word frequency map. Use String, &str, slices, references.", 4, "project", { url: "https://doc.rust-lang.org/book/", label: "Rust Book Reference", platform: "docs" }),
+      makeTask("p1w2d1", 1, 2, 1, "Ownership Rules Deep Dive", "The 3 ownership rules. Move semantics, Copy trait. Why String vs &str. Work through Rust Book Ch 4.1–4.2.", 4, "reading", { url: "https://doc.rust-lang.org/book/ch04-01-what-is-ownership.html", label: "Rust Book — Ownership", platform: "docs" }, {
+        keyPoints: [
+          'Rule 1: Each value has exactly one owner',
+          'Rule 2: There can only be one owner at a time',
+          'Rule 3: When the owner goes out of scope, the value is dropped (memory freed)',
+          'Move: assigning a heap type transfers ownership — old variable becomes invalid',
+          'Copy trait: stack-only types (i32, f64, bool, char, &str) are copied, not moved',
+        ],
+        codeExample: `fn takes_ownership(s: String) {
+    println!("{s}");
+}   // s is dropped here — memory freed
+
+fn makes_copy(n: i32) {
+    println!("{n}");
+}   // n is a copy — original still valid
+
+fn gives_ownership() -> String {
+    String::from("hello")  // returned = ownership transferred to caller
+}
+
+fn main() {
+    let s = String::from("world");
+    takes_ownership(s);
+    // println!("{s}"); // ERROR: s was moved into takes_ownership
+
+    let x = 5;
+    makes_copy(x);
+    println!("{x}"); // fine: i32 is Copy
+
+    let s2 = gives_ownership(); // s2 owns the String
+    println!("{s2}");
+}`,
+        commonMistakes: [
+          'Passing a String to a function and then trying to use it — it was moved into the function',
+          'Thinking that assigning a String copies it like an integer — use clone() for explicit copy',
+        ],
+        practicePrompt: 'Write three functions: one that moves a String (consuming it), one that borrows it (&String), one that returns ownership. Observe what you can and cannot do after each call.',
+      }),
+      makeTask("p1w2d2", 1, 2, 2, "References & Borrowing", "Immutable vs mutable references, the borrow checker rules, dangling references. Practice fixing borrow errors.", 4, "video", { url: "https://www.udemy.com/course/learn-to-code-with-rust/", label: "Learn to Code with Rust — Borrowing", platform: "udemy" }, {
+        keyPoints: [
+          '& creates an immutable reference — you can read but not modify',
+          '&mut creates a mutable reference — you can read and modify',
+          'Borrow rule 1: Many immutable references OR one mutable reference — never both at once',
+          'Borrow rule 2: References must always be valid (no dangling pointers)',
+          'The borrow checker enforces these at compile time — no runtime cost',
+        ],
+        codeExample: `fn length(s: &String) -> usize {
+    s.len()  // borrow s, don't take ownership
+}
+
+fn push_hello(s: &mut String) {
+    s.push_str(" hello");
+}
+
+fn main() {
+    let s = String::from("world");
+    let len = length(&s);   // lend s, s still valid
+    println!("{s} has {len} chars");
+
+    let mut s2 = String::from("world");
+    push_hello(&mut s2);    // mutable borrow
+    println!("{s2}");       // "world hello"
+
+    // Multiple immutable refs: ok
+    let r1 = &s;
+    let r2 = &s;
+    println!("{r1} {r2}");
+
+    // Can't have mutable + immutable at same time:
+    // let r3 = &mut s;  // ERROR if r1/r2 still in scope
+}`,
+        commonMistakes: [
+          'Trying to have a mutable reference while immutable references exist — borrow checker error',
+          'Creating a mutable reference to a non-mut variable — you must declare let mut first',
+        ],
+        practicePrompt: 'Write a function that takes &mut Vec<i32> and removes all even numbers in-place. Test it: create a vec, borrow it mutably, print before and after.',
+      }),
+      makeTask("p1w2d3", 1, 2, 3, "Slices: &str and &[T]", "String slices, array slices, slice syntax. Understand why slices are safer than indices.", 4, "coding", { url: "https://doc.rust-lang.org/book/ch04-03-slices.html", label: "Rust Book — Slices", platform: "docs" }, {
+        keyPoints: [
+          '&str is a string slice — reference to a portion of a String or string literal',
+          '&[T] is a slice of an array or Vec — reference to contiguous elements',
+          'Slices contain a pointer + length — they are "fat pointers"',
+          'String literals ("hello") are &\'static str — stored in the binary',
+          'Slices prevent use-after-free bugs that would exist with raw indices',
+        ],
+        codeExample: `fn first_word(s: &str) -> &str {
+    let bytes = s.as_bytes();
+    for (i, &byte) in bytes.iter().enumerate() {
+        if byte == b' ' {
+            return &s[..i];  // slice up to space
+        }
+    }
+    s  // whole string if no space
+}
+
+fn sum_slice(nums: &[i32]) -> i32 {
+    nums.iter().sum()
+}
+
+fn main() {
+    let sentence = String::from("hello world");
+    let word = first_word(&sentence);
+    println!("first word: {word}");
+
+    let arr = [1, 2, 3, 4, 5];
+    let mid = &arr[1..4];  // [2, 3, 4]
+    println!("sum of middle: {}", sum_slice(mid));
+}`,
+        commonMistakes: [
+          'Indexing a String with s[0] — Rust strings are UTF-8, index by bytes not chars',
+          'Keeping a slice reference after modifying the source — borrow checker prevents this',
+        ],
+        practicePrompt: 'Write a function first_sentence(s: &str) -> &str that returns everything before the first period. Test with "Hello world. How are you."',
+      }),
+      makeTask("p1w2d4", 1, 2, 4, "String Types: String vs &str", "Heap-allocated String, string literals, String methods, format! macro, string concatenation. Build string manipulation exercises.", 4, "coding", { url: "https://www.udemy.com/course/learn-to-code-with-rust/", label: "Learn to Code with Rust — Strings", platform: "udemy" }, {
+        keyPoints: [
+          'String: heap-allocated, growable, owned — created with String::from() or .to_string()',
+          '&str: borrowed string data — string literals are &\'static str',
+          'Use &str for function parameters when you don\'t need ownership',
+          'format!() creates a new String without consuming inputs — prefer over + operator',
+          'Common methods: len(), is_empty(), contains(), starts_with(), split(), trim(), to_uppercase()',
+        ],
+        codeExample: `fn greet(name: &str) -> String {
+    format!("Hello, {name}!")
+}
+
+fn main() {
+    // Creating strings
+    let s1 = String::from("Hello");
+    let s2 = " World".to_string();
+
+    // Concatenation — + moves s1
+    let s3 = s1 + &s2;
+    // s1 is moved; use format! to avoid this:
+    let s4 = format!("{} {}", "Hello", "World");
+
+    // Common operations
+    let email = "  user@example.com  ";
+    let clean = email.trim();
+    let parts: Vec<&str> = clean.split('@').collect();
+    println!("user: {}, domain: {}", parts[0], parts[1]);
+
+    // Check & transform
+    let s = "rust programming";
+    println!("{}", s.to_uppercase());       // RUST PROGRAMMING
+    println!("{}", s.contains("rust"));     // true
+    println!("{}", s.replace("rust", "go")); // go programming
+}`,
+        commonMistakes: [
+          'Using + for multiple concatenations — each + moves the first arg; use format! instead',
+          'Passing a String where &str expected without &s — Rust can coerce &String to &str',
+        ],
+        practicePrompt: 'Write a function that takes a full name (&str), splits it into first and last name, capitalizes each, and returns "Last, First" format using format!.',
+      }),
+      makeTask("p1w2d5", 1, 2, 5, "Clone vs Copy — Understanding the Trait", "Why some types implement Copy (stack-only) vs Clone (heap types). Derive macros: #[derive(Clone, Copy)].", 4, "video", { url: "https://www.udemy.com/course/learn-to-code-with-rust/", label: "Learn to Code with Rust", platform: "udemy" }, {
+        keyPoints: [
+          'Copy: implicit bit-wise copy on assignment — for types entirely on the stack',
+          'Clone: explicit deep copy via .clone() — must be called manually',
+          'If a type contains a String or Vec, it cannot implement Copy (heap involved)',
+          '#[derive(Clone, Copy)] auto-implements for simple structs/enums',
+          'All Copy types are also Clone, but not vice versa',
+        ],
+        codeExample: `#[derive(Clone, Copy, Debug)]
+struct Point {
+    x: f64,
+    y: f64,
+}
+
+#[derive(Clone, Debug)]
+struct Circle {
+    center: Point,    // Point is Copy — can be in Clone-only type
+    radius: f64,
+    label: String,    // String is not Copy — so Circle cannot be Copy
+}
+
+fn main() {
+    let p1 = Point { x: 1.0, y: 2.0 };
+    let p2 = p1;        // Copy: p1 still valid
+    println!("{p1:?} {p2:?}");
+
+    let c1 = Circle { center: p1, radius: 5.0, label: String::from("A") };
+    let c2 = c1.clone();  // must explicitly clone
+    // c1 still valid because we called clone(), not moved
+    println!("{:?}", c1.label);
+}`,
+        commonMistakes: [
+          'Deriving Copy on a struct that contains String/Vec — compiler error',
+          'Calling .clone() everywhere to avoid thinking about ownership — learn to use references',
+        ],
+        practicePrompt: 'Create a Color struct with r, g, b: u8 fields. Derive Clone + Copy + Debug. Verify it copies by assigning and modifying the copy without affecting the original.',
+      }),
+      makeTask("p1w2d6", 1, 2, 6, "Borrow Checker Practice — Fix the Errors", "15 intentionally broken programs. Fix each borrow error. Understand compiler messages.", 4, "exercise", { url: "https://github.com/rust-lang/rustlings", label: "Rustlings Exercises", platform: "github" }, {
+        keyPoints: [
+          'Rustlings exercises are small Rust programs with intentional errors to fix',
+          'Compiler error E0502: cannot borrow as mutable because it is also borrowed as immutable',
+          'Compiler error E0505: cannot move out of a value because it is borrowed',
+          'NLL (Non-Lexical Lifetimes): borrows end when last used, not at end of block',
+          'Read compiler error messages carefully — they often suggest the exact fix',
+        ],
+        codeExample: `// Common borrow error patterns and fixes:
+
+fn main() {
+    let mut v = vec![1, 2, 3];
+
+    // ERROR: cannot borrow v as mutable while immutable borrow exists
+    // let first = &v[0];
+    // v.push(4);  // ERROR
+    // println!("{first}");
+
+    // FIX: use indices after push, or clone first
+    let first = v[0];  // Copy, not borrow
+    v.push(4);
+    println!("first={first}, v={v:?}");
+
+    // ERROR: moving out of a borrowed context
+    let s = String::from("hello");
+    let r = &s;
+    // let owned = *r;  // ERROR: can't move through reference
+    let owned = r.clone();  // FIX: clone
+    println!("{s} {owned}");
+}`,
+        commonMistakes: [
+          'Giving up on Rust because of borrow errors — every error is a learning opportunity',
+          'Using clone() to silence errors without understanding why they occur',
+        ],
+        practicePrompt: 'Complete rustlings ownership/ exercises (move_semantics1-6, references1-2). Note each error message and the fix you used.',
+      }),
+      makeTask("p1w2d7", 1, 2, 7, "Week 2 Project: Word Counter CLI", "Build a word-count tool that reads a file, returns word frequency map. Use String, &str, slices, references.", 4, "project", { url: "https://doc.rust-lang.org/book/", label: "Rust Book Reference", platform: "docs" }, {
+        keyPoints: [
+          'std::fs::read_to_string() reads a whole file into a String',
+          'std::env::args() provides command-line arguments as an iterator',
+          'HashMap<K, V> stores key-value pairs — ideal for word frequency counting',
+          'entry() API: map.entry(word).or_insert(0) is idiomatic for counting',
+          'Sorting a HashMap by value requires collecting into Vec and sorting',
+        ],
+        codeExample: `use std::collections::HashMap;
+use std::fs;
+use std::env;
+
+fn count_words(text: &str) -> HashMap<&str, usize> {
+    let mut map = HashMap::new();
+    for word in text.split_whitespace() {
+        let count = map.entry(word).or_insert(0);
+        *count += 1;
+    }
+    map
+}
+
+fn main() {
+    let args: Vec<String> = env::args().collect();
+    let filename = args.get(1).expect("Usage: word_count <file>");
+    let content = fs::read_to_string(filename).expect("Cannot read file");
+
+    let counts = count_words(&content);
+    let mut pairs: Vec<(&&str, &usize)> = counts.iter().collect();
+    pairs.sort_by(|a, b| b.1.cmp(a.1)); // sort by count desc
+
+    for (word, count) in pairs.iter().take(10) {
+        println!("{word}: {count}");
+    }
+}`,
+        commonMistakes: [
+          'Using String as HashMap key instead of &str — causes lifetime issues; store owned String',
+          'Forgetting to dereference the count: *count += 1 (not count += 1)',
+        ],
+        practicePrompt: 'Build the word counter. Add a --top N flag to show only top N words. Add a --exclude flag to skip common words like "the", "a", "is".',
+      }),
     ],
   },
   {
@@ -122,13 +555,321 @@ fn main() {
     goal: "Build custom data types with structs and enums, master pattern matching and Option/Result.",
     isCompleted: false,
     tasks: [
-      makeTask("p1w3d1", 1, 3, 1, "Structs: Defining & Using", "Struct syntax, field shorthand, struct update syntax, tuple structs, unit structs. Implement methods with impl block.", 4, "video", { url: "https://www.udemy.com/course/learn-to-code-with-rust/", label: "Learn to Code with Rust — Structs", platform: "udemy" }),
-      makeTask("p1w3d2", 1, 3, 2, "Methods & Associated Functions", "Difference between &self, &mut self, self. Associated functions (like new). Build a Rectangle struct with area/perimeter methods.", 4, "coding", { url: "https://doc.rust-lang.org/book/ch05-03-method-syntax.html", label: "Rust Book — Methods", platform: "docs" }),
-      makeTask("p1w3d3", 1, 3, 3, "Enums & Match Expressions", "Enum variants with data, match arms, exhaustive matching, _ wildcard, match guards. Rust Book Ch 6.", 4, "video", { url: "https://www.udemy.com/course/learn-to-code-with-rust/", label: "Learn to Code with Rust — Enums", platform: "udemy" }),
-      makeTask("p1w3d4", 1, 3, 4, "Option<T> — Null Safety in Rust", "Option::Some/None, unwrap/expect/unwrap_or, if let, while let patterns. Replace null-checks with Option.", 4, "coding", { url: "https://doc.rust-lang.org/book/ch06-01-defining-an-enum.html", label: "Rust Book — Option", platform: "docs" }),
-      makeTask("p1w3d5", 1, 3, 5, "Result<T, E> — Error Handling Basics", "Result::Ok/Err, match on Result, ? operator, error propagation. Build a file-parsing function with proper errors.", 4, "video", { url: "https://www.udemy.com/course/learn-to-code-with-rust/", label: "Learn to Code with Rust — Result", platform: "udemy" }),
-      makeTask("p1w3d6", 1, 3, 6, "Pattern Matching Deep Dive", "Destructuring structs/enums/tuples in match, if let chains, @ bindings, nested patterns.", 4, "exercise", { url: "https://doc.rust-lang.org/book/ch18-00-patterns.html", label: "Rust Book — Patterns", platform: "docs" }),
-      makeTask("p1w3d7", 1, 3, 7, "Project: Student Grade Tracker", "Build a struct-based grade tracking app. StudentRecord with name, grades Vec, avg method. Enum for letter grades.", 4, "project", { url: "https://www.udemy.com/course/learn-to-code-with-rust/", label: "Learn to Code with Rust", platform: "udemy" }),
+      makeTask("p1w3d1", 1, 3, 1, "Structs: Defining & Using", "Struct syntax, field shorthand, struct update syntax, tuple structs, unit structs. Implement methods with impl block.", 4, "video", { url: "https://www.udemy.com/course/learn-to-code-with-rust/", label: "Learn to Code with Rust — Structs", platform: "udemy" }, {
+        keyPoints: [
+          'struct groups related data into a named type — fields have names and types',
+          'Field shorthand: if variable name equals field name, write just the name',
+          'Struct update syntax: ..other_struct copies remaining fields from another instance',
+          'Tuple structs: struct Point(f64, f64) — access with .0, .1',
+          'Unit structs: struct Marker — no fields, useful for trait implementations',
+        ],
+        codeExample: `#[derive(Debug)]
+struct User {
+    username: String,
+    email: String,
+    age: u32,
+    active: bool,
+}
+
+fn create_user(email: String, username: String) -> User {
+    User {
+        email,           // field shorthand
+        username,        // field shorthand
+        age: 0,
+        active: true,
+    }
+}
+
+fn main() {
+    let user1 = create_user(
+        String::from("alice@example.com"),
+        String::from("alice"),
+    );
+
+    // Struct update syntax
+    let user2 = User {
+        email: String::from("bob@example.com"),
+        username: String::from("bob"),
+        ..user1  // copy age and active from user1
+    };
+    // Note: user1 is partially moved if String fields are used in ..user1
+
+    println!("{user2:?}");
+}`,
+        commonMistakes: [
+          'Struct update ..user1 moves String fields from user1 — user1.email becomes invalid',
+          'Forgetting #[derive(Debug)] and then trying to print with {:?}',
+        ],
+        practicePrompt: 'Create a BankAccount struct with owner: String, balance: f64, active: bool. Add a new() constructor. Test struct update syntax to create a second account from the first.',
+      }),
+      makeTask("p1w3d2", 1, 3, 2, "Methods & Associated Functions", "Difference between &self, &mut self, self. Associated functions (like new). Build a Rectangle struct with area/perimeter methods.", 4, "coding", { url: "https://doc.rust-lang.org/book/ch05-03-method-syntax.html", label: "Rust Book — Methods", platform: "docs" }, {
+        keyPoints: [
+          '&self: read-only method — borrows self, does not modify or consume',
+          '&mut self: mutating method — borrows self mutably, can modify fields',
+          'self: consuming method — takes ownership, struct unavailable after call',
+          'Associated functions (no self): called as Struct::function() — used for constructors',
+          'Multiple impl blocks are allowed — useful for organizing large types',
+        ],
+        codeExample: `#[derive(Debug)]
+struct Rectangle {
+    width: f64,
+    height: f64,
+}
+
+impl Rectangle {
+    // Associated function (constructor)
+    pub fn new(width: f64, height: f64) -> Self {
+        Self { width, height }
+    }
+
+    // Read-only method
+    pub fn area(&self) -> f64 {
+        self.width * self.height
+    }
+
+    pub fn perimeter(&self) -> f64 {
+        2.0 * (self.width + self.height)
+    }
+
+    // Mutating method
+    pub fn scale(&mut self, factor: f64) {
+        self.width *= factor;
+        self.height *= factor;
+    }
+
+    pub fn is_square(&self) -> bool {
+        (self.width - self.height).abs() < f64::EPSILON
+    }
+}
+
+fn main() {
+    let mut rect = Rectangle::new(10.0, 5.0);
+    println!("Area: {:.1}", rect.area());
+    rect.scale(2.0);
+    println!("After scale: {rect:?}");
+}`,
+        commonMistakes: [
+          'Writing fn area(self) instead of fn area(&self) — consumes the struct unnecessarily',
+          'Forgetting pub on methods that need to be called from outside the module',
+        ],
+        practicePrompt: 'Add a contains(&self, other: &Rectangle) -> bool method that returns true if other fits inside self. Add a largest(rects: &[Rectangle]) -> &Rectangle static method.',
+      }),
+      makeTask("p1w3d3", 1, 3, 3, "Enums & Match Expressions", "Enum variants with data, match arms, exhaustive matching, _ wildcard, match guards. Rust Book Ch 6.", 4, "video", { url: "https://www.udemy.com/course/learn-to-code-with-rust/", label: "Learn to Code with Rust — Enums", platform: "udemy" }, {
+        keyPoints: [
+          'Enums can hold data — each variant can have different types and amounts',
+          'match is exhaustive — all variants must be handled (or use _ wildcard)',
+          'match arms return values — the entire match expression is a value',
+          'match guards: extra condition with if after the pattern',
+          'Enums replace unions/tagged unions from C — much safer and more ergonomic',
+        ],
+        codeExample: `#[derive(Debug)]
+enum Message {
+    Quit,
+    Move { x: i32, y: i32 },
+    Write(String),
+    ChangeColor(u8, u8, u8),
+}
+
+fn process(msg: Message) -> String {
+    match msg {
+        Message::Quit => String::from("quit"),
+        Message::Move { x, y } => format!("move to ({x}, {y})"),
+        Message::Write(text) => format!("write: {text}"),
+        Message::ChangeColor(r, g, b) => format!("color: #{r:02X}{g:02X}{b:02X}"),
+    }
+}
+
+// Match guards
+fn classify_number(n: i32) -> &'static str {
+    match n {
+        0 => "zero",
+        n if n < 0 => "negative",
+        n if n % 2 == 0 => "positive even",
+        _ => "positive odd",
+    }
+}`,
+        commonMistakes: [
+          'Forgetting to handle all variants — Rust will not compile if match is non-exhaustive',
+          'Using if/else when match would be cleaner — match on enums is idiomatic Rust',
+        ],
+        practicePrompt: 'Create a Shape enum with Circle(f64), Rectangle(f64, f64), Triangle(f64, f64, f64) variants. Write a match expression computing area for each. Add a perimeter method.',
+      }),
+      makeTask("p1w3d4", 1, 3, 4, "Option<T> — Null Safety in Rust", "Option::Some/None, unwrap/expect/unwrap_or, if let, while let patterns. Replace null-checks with Option.", 4, "coding", { url: "https://doc.rust-lang.org/book/ch06-01-defining-an-enum.html", label: "Rust Book — Option", platform: "docs" }, {
+        keyPoints: [
+          'Option<T> is an enum: Some(T) when value exists, None when absent — no null pointers',
+          'unwrap() gets the value but panics on None — only use when you are certain it\'s Some',
+          'expect("message") like unwrap but with a custom panic message — good for debugging',
+          'unwrap_or(default) returns default on None — safe alternative to unwrap',
+          'if let Some(x) = option { ... } is idiomatic for single-variant pattern matching',
+        ],
+        codeExample: `fn find_user(id: u32) -> Option<String> {
+    if id == 1 { Some(String::from("Alice")) }
+    else { None }
+}
+
+fn main() {
+    // Basic usage
+    let user = find_user(1);
+    match user {
+        Some(name) => println!("Found: {name}"),
+        None => println!("Not found"),
+    }
+
+    // Concise: if let
+    if let Some(name) = find_user(2) {
+        println!("Found: {name}");
+    }
+
+    // Chaining with ? operator (in Result context)
+    // let name = find_user(id)?; // returns None early if None
+
+    // Safe alternatives to unwrap
+    let name = find_user(1).unwrap_or(String::from("Guest"));
+    let name2 = find_user(1).unwrap_or_else(|| String::from("Guest"));
+    let upper = find_user(1).map(|s| s.to_uppercase());
+    println!("{name} {name2} {upper:?}");
+}`,
+        commonMistakes: [
+          'Using .unwrap() without checking — always prefer .unwrap_or(), .map(), or match',
+          'Not using Option — returning -1 or empty string for "no value" is not idiomatic Rust',
+        ],
+        practicePrompt: 'Write a function lookup_config(key: &str) -> Option<&str> using a HashMap. Call it 5 times with different keys, handle Some and None with if let and unwrap_or.',
+      }),
+      makeTask("p1w3d5", 1, 3, 5, "Result<T, E> — Error Handling Basics", "Result::Ok/Err, match on Result, ? operator, error propagation. Build a file-parsing function with proper errors.", 4, "video", { url: "https://www.udemy.com/course/learn-to-code-with-rust/", label: "Learn to Code with Rust — Result", platform: "udemy" }, {
+        keyPoints: [
+          'Result<T, E> is an enum: Ok(T) for success, Err(E) for failure — replaces exceptions',
+          'The ? operator propagates errors up the call stack — like try/catch but at compile time',
+          '? can only be used in functions returning Result or Option',
+          'map_err() transforms the error type — useful when ? requires specific error types',
+          'unwrap()/expect() on Result panics on Err — only use in scripts or tests',
+        ],
+        codeExample: `use std::fs;
+use std::num::ParseIntError;
+
+#[derive(Debug)]
+enum AppError {
+    Io(std::io::Error),
+    Parse(ParseIntError),
+}
+
+impl From<std::io::Error> for AppError {
+    fn from(e: std::io::Error) -> Self { AppError::Io(e) }
+}
+impl From<ParseIntError> for AppError {
+    fn from(e: ParseIntError) -> Self { AppError::Parse(e) }
+}
+
+fn read_number_from_file(path: &str) -> Result<i64, AppError> {
+    let content = fs::read_to_string(path)?;  // ? converts io::Error -> AppError
+    let n: i64 = content.trim().parse()?;     // ? converts ParseIntError -> AppError
+    Ok(n)
+}
+
+fn main() {
+    match read_number_from_file("number.txt") {
+        Ok(n) => println!("Number: {n}"),
+        Err(AppError::Io(e)) => println!("IO error: {e}"),
+        Err(AppError::Parse(e)) => println!("Parse error: {e}"),
+    }
+}`,
+        commonMistakes: [
+          'Using ? in main() without declaring fn main() -> Result<(), Box<dyn Error>>',
+          'Returning different error types with ? without implementing From conversions',
+        ],
+        practicePrompt: 'Write a CSV parser: read a file with "name,age" per line, parse each, return Vec<(String, u32)> or a custom ParseError. Handle malformed lines gracefully.',
+      }),
+      makeTask("p1w3d6", 1, 3, 6, "Pattern Matching Deep Dive", "Destructuring structs/enums/tuples in match, if let chains, @ bindings, nested patterns.", 4, "exercise", { url: "https://doc.rust-lang.org/book/ch18-00-patterns.html", label: "Rust Book — Patterns", platform: "docs" }, {
+        keyPoints: [
+          'Patterns work in: match, if let, while let, for loops, let bindings, function parameters',
+          'Destructuring structs: let Point { x, y } = p; extracts fields directly',
+          '@ binding: let n @ 1..=10 = value — bind AND test the value in one step',
+          'Tuple patterns in match: match (x, y) { (0, 0) => ..., (x, 0) => ..., _ => ... }',
+          'Multiple patterns with |: match n { 1 | 2 | 3 => "small", _ => "large" }',
+        ],
+        codeExample: `#[derive(Debug)]
+struct Point { x: i32, y: i32 }
+
+enum Cmd { Move(Point), Say(String), Volume(u8) }
+
+fn process(cmd: Cmd) {
+    match cmd {
+        Cmd::Move(Point { x: 0, y }) => println!("move on y-axis to {y}"),
+        Cmd::Move(Point { x, y: 0 }) => println!("move on x-axis to {x}"),
+        Cmd::Move(Point { x, y }) => println!("move to ({x}, {y})"),
+        Cmd::Say(msg) if msg.is_empty() => println!("silent"),
+        Cmd::Say(msg) => println!("say: {msg}"),
+        Cmd::Volume(v @ 0..=10) => println!("quiet: {v}"),
+        Cmd::Volume(v @ 90..=100) => println!("loud: {v}"),
+        Cmd::Volume(v) => println!("volume: {v}"),
+    }
+}
+
+fn main() {
+    // if let chains (Rust 2024)
+    let pair = (1, -2);
+    if let (x, y) = pair && x > 0 && y < 0 {
+        println!("first positive, second negative");
+    }
+}`,
+        commonMistakes: [
+          'Using _ in @ bindings: n @ _ — just use n without @ for a catch-all bind',
+          'Trying to use non-const values in patterns — patterns require compile-time constants',
+        ],
+        practicePrompt: 'Write a message router: enum Message with 5+ variants including nested structs. Handle each with match, using struct destructuring, @ bindings, and guards.',
+      }),
+      makeTask("p1w3d7", 1, 3, 7, "Project: Student Grade Tracker", "Build a struct-based grade tracking app. StudentRecord with name, grades Vec, avg method. Enum for letter grades.", 4, "project", { url: "https://www.udemy.com/course/learn-to-code-with-rust/", label: "Learn to Code with Rust", platform: "udemy" }, {
+        keyPoints: [
+          'Combine structs + enums + methods to build a small but complete application',
+          'Vec<f64> for grades — push, iter, sum, len operations',
+          'Enum for letter grade: A, B, C, D, F with From<f64> implementation',
+          'Display trait: implement fmt::Display for custom println! output',
+          'Sort students by average with sort_by on a Vec of StudentRecord',
+        ],
+        codeExample: `use std::fmt;
+
+#[derive(Debug, PartialEq)]
+enum Grade { A, B, C, D, F }
+
+impl From<f64> for Grade {
+    fn from(avg: f64) -> Self {
+        match avg as u32 {
+            90..=100 => Grade::A,
+            80..=89  => Grade::B,
+            70..=79  => Grade::C,
+            60..=69  => Grade::D,
+            _        => Grade::F,
+        }
+    }
+}
+
+struct Student {
+    name: String,
+    scores: Vec<f64>,
+}
+
+impl Student {
+    fn new(name: &str) -> Self {
+        Self { name: name.to_string(), scores: Vec::new() }
+    }
+    fn add_score(&mut self, s: f64) { self.scores.push(s); }
+    fn average(&self) -> f64 {
+        if self.scores.is_empty() { return 0.0; }
+        self.scores.iter().sum::<f64>() / self.scores.len() as f64
+    }
+    fn grade(&self) -> Grade { Grade::from(self.average()) }
+}
+
+impl fmt::Display for Student {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}: {:.1} ({:?})", self.name, self.average(), self.grade())
+    }
+}`,
+        commonMistakes: [
+          'Implementing Display by printing directly — it must write to f using write! macro',
+          'Using f64 in match patterns — floats cannot be used in patterns, convert to int first',
+        ],
+        practicePrompt: 'Build the full grade tracker with at least 5 students, 4 scores each. Sort by average descending. Print a table with rank, name, average, letter grade.',
+      }),
     ],
   },
   {
@@ -139,11 +880,226 @@ fn main() {
     goal: "Understand trait-based polymorphism, use iterators functionally, and handle errors idiomatically.",
     isCompleted: false,
     tasks: [
-      makeTask("p1w4d1", 1, 4, 1, "Traits: Defining & Implementing", "Define custom traits, implement for your types, default implementations, trait bounds. Display/Debug traits.", 4, "video", { url: "https://www.udemy.com/course/learn-to-code-with-rust/", label: "Learn to Code with Rust — Traits", platform: "udemy" }),
-      makeTask("p1w4d2", 1, 4, 2, "Iterators & Closures", "Iterator trait, map/filter/fold/collect, closure syntax, move closures, chaining iterators.", 4, "video", { url: "https://www.udemy.com/course/learn-to-code-with-rust/", label: "Learn to Code with Rust — Iterators", platform: "udemy" }),
-      makeTask("p1w4d3", 1, 4, 3, "Collections: Vec, HashMap, HashSet", "Vec methods, HashMap insert/get/entry API, HashSet operations. When to use each.", 4, "coding", { url: "https://doc.rust-lang.org/book/ch08-00-common-collections.html", label: "Rust Book — Collections", platform: "docs" }),
-      makeTask("p1w4d4", 1, 4, 4, "Error Handling: Box<dyn Error> & thiserror", "Custom error types, Box<dyn Error>, the thiserror crate, anyhow crate. Write robust error handling.", 4, "coding", { url: "https://doc.rust-lang.org/book/ch09-00-error-handling.html", label: "Rust Book — Error Handling", platform: "docs" }),
-      makeTask("p1w4d5", 1, 4, 5, "Generics & Type Parameters", "Generic functions, generic structs, multiple type parameters, where clauses. Rust Book Ch 10.", 4, "reading", { url: "https://doc.rust-lang.org/book/ch10-01-syntax.html", label: "Rust Book — Generics", platform: "docs" }),
+      makeTask("p1w4d1", 1, 4, 1, "Traits: Defining & Implementing", "Define custom traits, implement for your types, default implementations, trait bounds. Display/Debug traits.", 4, "video", { url: "https://www.udemy.com/course/learn-to-code-with-rust/", label: "Learn to Code with Rust — Traits", platform: "udemy" }, {
+        keyPoints: [
+          'Traits define shared behavior — like interfaces in other languages but more powerful',
+          'Default implementations: provide a body in the trait; types can override or use default',
+          'Trait bounds: fn largest<T: PartialOrd>(list: &[T]) constrains T to types with ordering',
+          'Coherence rule (orphan rule): you can only impl a trait for a type if you own the trait or the type',
+          'Derive macros (#[derive(Debug, Clone)]) auto-implement common traits',
+        ],
+        codeExample: `trait Animal {
+    fn name(&self) -> &str;
+    fn sound(&self) -> &str;
+
+    // Default implementation
+    fn describe(&self) -> String {
+        format!("The {} says '{}'", self.name(), self.sound())
+    }
+}
+
+struct Dog { name: String }
+struct Cat { name: String }
+
+impl Animal for Dog {
+    fn name(&self) -> &str { &self.name }
+    fn sound(&self) -> &str { "woof" }
+}
+
+impl Animal for Cat {
+    fn name(&self) -> &str { &self.name }
+    fn sound(&self) -> &str { "meow" }
+    // Overrides default describe()
+    fn describe(&self) -> String {
+        format!("{} ignores you and says '{}'", self.name(), self.sound())
+    }
+}
+
+fn make_sound(animal: &dyn Animal) {
+    println!("{}", animal.describe());
+}`,
+        commonMistakes: [
+          'Implementing std::fmt::Display for a type you don\'t own (orphan rule violation)',
+          'Calling a default method on a type that overrides it — the override takes precedence',
+        ],
+        practicePrompt: 'Create a Drawable trait with draw(&self) -> String and bounding_box(&self) -> (f64, f64) methods. Implement for Circle, Rectangle, Triangle. Write a function that draws all shapes in a Vec<Box<dyn Drawable>>.',
+      }),
+      makeTask("p1w4d2", 1, 4, 2, "Iterators & Closures", "Iterator trait, map/filter/fold/collect, closure syntax, move closures, chaining iterators.", 4, "video", { url: "https://www.udemy.com/course/learn-to-code-with-rust/", label: "Learn to Code with Rust — Iterators", platform: "udemy" }, {
+        keyPoints: [
+          'Iterators are lazy — they don\'t compute until consumed by collect, sum, for_each, etc.',
+          'Closures: |x| x + 1 captures variables from surrounding scope',
+          'map() transforms each element, filter() keeps matching elements, fold() accumulates',
+          'collect::<Vec<_>>() materializes an iterator into a collection',
+          'move closures: move |x| ... takes ownership of captured variables — needed for threads',
+        ],
+        codeExample: `fn main() {
+    let numbers = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+
+    // Chained iterator operations (lazy until collect/sum)
+    let result: Vec<i32> = numbers.iter()
+        .filter(|&&x| x % 2 == 0)   // keep evens: [2,4,6,8,10]
+        .map(|&x| x * x)             // square them: [4,16,36,64,100]
+        .collect();
+    println!("{result:?}");
+
+    // fold (like reduce)
+    let sum = numbers.iter().fold(0, |acc, &x| acc + x);
+    println!("sum: {sum}");
+
+    // Closure capturing environment
+    let threshold = 5;
+    let big: Vec<&i32> = numbers.iter()
+        .filter(|&&x| x > threshold)  // captures threshold
+        .collect();
+
+    // Move closure (for threads)
+    let data = vec![1, 2, 3];
+    let handle = std::thread::spawn(move || {
+        println!("{data:?}"); // data moved into closure
+    });
+    handle.join().unwrap();
+}`,
+        commonMistakes: [
+          'Calling iter() for owned values vs into_iter() — iter() borrows, into_iter() moves',
+          'Forgetting that .filter() closure gets &&T when chaining — double deref or use pattern |&x|',
+        ],
+        practicePrompt: 'Given a Vec of strings representing sales amounts "USD 150.50", chain .map() to parse the numbers, .filter() to keep > 100, .sum() to total them. Use ? with map for error handling.',
+      }),
+      makeTask("p1w4d3", 1, 4, 3, "Collections: Vec, HashMap, HashSet", "Vec methods, HashMap insert/get/entry API, HashSet operations. When to use each.", 4, "coding", { url: "https://doc.rust-lang.org/book/ch08-00-common-collections.html", label: "Rust Book — Collections", platform: "docs" }, {
+        keyPoints: [
+          'Vec<T>: sequential access, push/pop at end O(1), insert/remove at index O(n)',
+          'HashMap<K, V>: key-value pairs, O(1) average lookup, keys must implement Hash + Eq',
+          'HashSet<T>: unique values, O(1) contains check, union/intersection/difference operations',
+          'BTreeMap<K, V>: sorted keys, O(log n) operations — use when ordering matters',
+          'entry() API avoids double lookups: map.entry(key).or_insert_with(|| default)',
+        ],
+        codeExample: `use std::collections::{HashMap, HashSet};
+
+fn main() {
+    // Vec operations
+    let mut v: Vec<i32> = Vec::new();
+    v.push(1); v.push(2); v.push(3);
+    v.retain(|&x| x > 1);     // remove if condition false
+    println!("{v:?}");          // [2, 3]
+
+    // HashMap — frequency counter
+    let text = "the quick brown fox jumps the fox";
+    let mut freq: HashMap<&str, u32> = HashMap::new();
+    for word in text.split_whitespace() {
+        *freq.entry(word).or_insert(0) += 1;
+    }
+    println!("{freq:?}");
+
+    // HashSet — unique values
+    let a: HashSet<i32> = [1, 2, 3, 4].iter().cloned().collect();
+    let b: HashSet<i32> = [3, 4, 5, 6].iter().cloned().collect();
+    let intersection: HashSet<&i32> = a.intersection(&b).collect();
+    println!("common: {intersection:?}");  // {3, 4}
+}`,
+        commonMistakes: [
+          'Using HashMap::get() which returns Option<&V> — don\'t forget to unwrap or match',
+          'Iterating over HashMap and expecting a sorted order — use BTreeMap for sorted iteration',
+        ],
+        practicePrompt: 'Build a simple in-memory phone book: HashMap<String, Vec<String>> (name -> list of numbers). Implement add, lookup, remove, list_all operations. Use HashSet to deduplicate numbers.',
+      }),
+      makeTask("p1w4d4", 1, 4, 4, "Error Handling: Box<dyn Error> & thiserror", "Custom error types, Box<dyn Error>, the thiserror crate, anyhow crate. Write robust error handling.", 4, "coding", { url: "https://doc.rust-lang.org/book/ch09-00-error-handling.html", label: "Rust Book — Error Handling", platform: "docs" }, {
+        keyPoints: [
+          'Box<dyn Error>: simplest way to return any error type from a function',
+          'thiserror crate: #[derive(Error)] for ergonomic custom error types in libraries',
+          'anyhow crate: anyhow::Result<T> for application-level error handling (no custom types needed)',
+          'impl Display for YourError is required for error types',
+          'Error context: anyhow\'s .context("message")? adds human-readable context to errors',
+        ],
+        codeExample: `// thiserror for library code
+use thiserror::Error;
+
+#[derive(Error, Debug)]
+pub enum ConfigError {
+    #[error("config file not found: {path}")]
+    NotFound { path: String },
+    #[error("invalid format on line {line}: {msg}")]
+    ParseError { line: usize, msg: String },
+    #[error("IO error: {0}")]
+    Io(#[from] std::io::Error),
+}
+
+fn load_config(path: &str) -> Result<String, ConfigError> {
+    let content = std::fs::read_to_string(path)
+        .map_err(|e| ConfigError::Io(e))?;
+    if content.is_empty() {
+        return Err(ConfigError::ParseError { line: 1, msg: "empty file".into() });
+    }
+    Ok(content)
+}
+
+// anyhow for application code
+use anyhow::{Context, Result};
+
+fn run() -> Result<()> {
+    let config = load_config("app.toml")
+        .context("Failed to load app configuration")?;
+    println!("{config}");
+    Ok(())
+}`,
+        commonMistakes: [
+          'Using Box<dyn Error> in library code — prefer thiserror for stable, typed errors',
+          'Not implementing From<OtherError> for your error type — then ? won\'t auto-convert',
+        ],
+        practicePrompt: 'Refactor your CSV parser from Week 3 to use thiserror with a CsvError enum (IoError, ParseError, InvalidHeader). Add .context() with anyhow for descriptive error messages.',
+      }),
+      makeTask("p1w4d5", 1, 4, 5, "Generics & Type Parameters", "Generic functions, generic structs, multiple type parameters, where clauses. Rust Book Ch 10.", 4, "reading", { url: "https://doc.rust-lang.org/book/ch10-01-syntax.html", label: "Rust Book — Generics", platform: "docs" }, {
+        keyPoints: [
+          'Generics allow writing code that works for multiple types without duplication',
+          'fn largest<T: PartialOrd>(list: &[T]) — T must implement PartialOrd for comparison',
+          'where clauses: cleaner syntax for complex bounds: where T: Clone + Debug',
+          'Monomorphization: Rust generates separate code for each concrete type — zero runtime cost',
+          'Associated types vs type parameters: Iterator::Item is an associated type (single impl per type)',
+        ],
+        codeExample: `// Generic function with trait bound
+fn largest<T: PartialOrd>(list: &[T]) -> &T {
+    let mut largest = &list[0];
+    for item in list {
+        if item > largest {
+            largest = item;
+        }
+    }
+    largest
+}
+
+// Generic struct
+#[derive(Debug)]
+struct Pair<T> {
+    first: T,
+    second: T,
+}
+
+impl<T: Clone + std::fmt::Display> Pair<T> {
+    fn new(first: T, second: T) -> Self {
+        Pair { first, second }
+    }
+
+    fn display_max(&self) where T: PartialOrd {
+        if self.first >= self.second {
+            println!("max is {}", self.first);
+        } else {
+            println!("max is {}", self.second);
+        }
+    }
+}
+
+fn main() {
+    let nums = vec![34, 50, 25, 100, 65];
+    println!("largest: {}", largest(&nums));
+
+    let p = Pair::new("hello", "world");
+    p.display_max();
+}`,
+        commonMistakes: [
+          'Not adding required trait bounds — compiler error "binary operation > cannot be applied to type T"',
+          'Using generics when a concrete type is fine — over-engineering reduces readability',
+        ],
+        practicePrompt: 'Write a generic Stack<T> with push, pop, peek, is_empty, len methods. Add a drain() method that returns all items as Vec<T>. Test with String, i32, and a custom struct.',
+      }),
       makeTask("p1w4d6", 1, 4, 6, "Testing in Rust", "#[test], #[cfg(test)], assert!/assert_eq!, integration tests, doctests. Test your grade tracker.", 4, "exercise", { url: "https://doc.rust-lang.org/book/ch11-00-testing.html", label: "Rust Book — Testing", platform: "docs" }),
       makeTask("p1w4d7", 1, 4, 7, "Phase 1 Capstone: CLI Todo App", "Build a full CLI todo app with: add/remove/complete/list tasks, persist to JSON file, proper error handling, unit tests.", 4, "project", { url: "https://www.udemy.com/course/learn-to-code-with-rust/", label: "Learn to Code with Rust", platform: "udemy" }),
     ],
