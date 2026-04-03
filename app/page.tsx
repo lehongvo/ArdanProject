@@ -2,20 +2,18 @@ import { TodayCard } from '@/components/dashboard/TodayCard';
 import { StreakCounter } from '@/components/dashboard/StreakCounter';
 import { PhaseProgress } from '@/components/dashboard/PhaseProgress';
 import { QuickStats } from '@/components/dashboard/QuickStats';
+import { DashboardHero } from '@/components/dashboard/DashboardHero';
 
 export default function DashboardPage() {
   return (
     <div className="p-4 md:p-6 max-w-5xl mx-auto space-y-5">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-black text-white">Lộ Trình Học 🦀</h1>
-        <p className="text-sm text-[#888] mt-0.5">Blockchain · ZK · Rust · Solana — 12 tháng đến Web3 job</p>
-      </div>
+      {/* Hero greeting */}
+      <DashboardHero />
 
       {/* Quick stats */}
       <QuickStats />
 
-      {/* Today + Streak */}
+      {/* Today + Streak side by side */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="md:col-span-2">
           <TodayCard />

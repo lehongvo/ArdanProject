@@ -9,7 +9,8 @@ function makeTask(
   description: string,
   estimatedHours: number,
   type: DailyTask['type'],
-  resource?: DailyTask['resource']
+  resource?: DailyTask['resource'],
+  enrichment?: Pick<DailyTask, 'keyPoints' | 'codeExample' | 'commonMistakes' | 'practicePrompt'>
 ): DailyTask {
   return {
     id,
@@ -22,6 +23,7 @@ function makeTask(
     type,
     resource,
     status: 'pending',
+    ...enrichment,
   }
 }
 
@@ -35,8 +37,59 @@ const phase1Weeks: Week[] = [
     goal: "Install Rust toolchain, understand Cargo, write your first programs with variables, types, and functions.",
     isCompleted: false,
     tasks: [
-      makeTask("p1w1d1", 1, 1, 1, "Install Rust & Cargo Setup", "Install rustup, configure VS Code with rust-analyzer, create first 'Hello World' project, explore cargo commands: build, run, check, fmt, clippy.", 4, "coding", { url: "https://www.udemy.com/course/learn-to-code-with-rust/", label: "Learn to Code with Rust — Section 1", platform: "udemy" }),
-      makeTask("p1w1d2", 1, 1, 2, "Variables, Mutability & Data Types", "Learn let/let mut, scalar types (i32, f64, bool, char), type inference, constants, shadowing. Practice in Rust Playground.", 4, "video", { url: "https://www.udemy.com/course/learn-to-code-with-rust/", label: "Learn to Code with Rust — Section 2", platform: "udemy" }),
+      makeTask("p1w1d1", 1, 1, 1, "Install Rust & Cargo Setup", "Install rustup, configure VS Code with rust-analyzer, create first 'Hello World' project, explore cargo commands: build, run, check, fmt, clippy.", 4, "coding", { url: "https://www.udemy.com/course/learn-to-code-with-rust/", label: "Learn to Code with Rust — Section 1", platform: "udemy" }, {
+        keyPoints: [
+          'rustup installs the Rust toolchain — use it, never install Rust manually',
+          'cargo is the build system AND package manager (like npm for JS)',
+          'cargo build compiles, cargo run compiles + executes, cargo check only type-checks',
+          'rust-analyzer VS Code extension gives IntelliSense and inline type hints',
+          'Cargo.toml is your project manifest — name, version, dependencies',
+        ],
+        codeExample: `// Your first Rust program
+fn main() {
+    println!("Hello, Web3 World!");
+
+    // cargo commands to know:
+    // cargo new my_project   -- create new project
+    // cargo build            -- compile
+    // cargo run              -- compile and run
+    // cargo check            -- fast type-check (no binary)
+    // cargo fmt              -- auto-format code
+    // cargo clippy           -- lint warnings
+}`,
+        commonMistakes: [
+          'Installing Rust via apt/brew instead of rustup — rustup manages multiple versions',
+          'Forgetting to add the rust-analyzer extension — coding without it is painful',
+        ],
+        practicePrompt: 'Create a new project called "hello-rust", edit main.rs to print your name, run it with cargo run, then run cargo clippy and cargo fmt.',
+      }),
+      makeTask("p1w1d2", 1, 1, 2, "Variables, Mutability & Data Types", "Learn let/let mut, scalar types (i32, f64, bool, char), type inference, constants, shadowing. Practice in Rust Playground.", 4, "video", { url: "https://www.udemy.com/course/learn-to-code-with-rust/", label: "Learn to Code with Rust — Section 2", platform: "udemy" }, {
+        keyPoints: [
+          'let is immutable by default — use let mut for mutability',
+          'Type inference: Rust deduces types from context, no need to annotate most variables',
+          'Shadowing: re-declare same name with let (creates a NEW variable, different from mut)',
+          'Constants (const) must have explicit type and must be a compile-time value',
+          'Scalar types: integers (i8..i128, u8..u128), floats (f32, f64), bool, char (4-byte Unicode)',
+        ],
+        codeExample: `fn main() {
+    let x = 5;            // immutable, type i32 inferred
+    let mut y = 10;       // mutable
+    y += 1;               // ok: y is now 11
+    let x = x + 1;        // shadowing — x is now 6 (new variable)
+    let x = x as f64 * 2.0; // shadow again with different type
+
+    const MAX_SCORE: u32 = 100;
+    let is_passing = true;
+    let grade: char = 'A';
+
+    println!("{x} {y} {MAX_SCORE} {is_passing} {grade}");
+}`,
+        commonMistakes: [
+          'Trying to mutate an immutable variable — forgot to write let mut',
+          'Confusing shadowing with mutation — shadowing creates a NEW binding, type can change',
+        ],
+        practicePrompt: 'Write a temperature converter: declare Celsius as a const, shadow it to convert to Fahrenheit (F = C * 9/5 + 32), then shadow again to add "°F" string. Print all three.',
+      }),
       makeTask("p1w1d3", 1, 1, 3, "Functions & Control Flow", "Define functions, understand parameters/return types, if/else expressions, loop/while/for, range patterns.", 4, "video", { url: "https://www.udemy.com/course/learn-to-code-with-rust/", label: "Learn to Code with Rust — Section 3", platform: "udemy" }),
       makeTask("p1w1d4", 1, 1, 4, "Compound Types: Tuples & Arrays", "Tuples vs arrays, destructuring, indexing, slices. Build a temperature converter program.", 4, "coding", { url: "https://doc.rust-lang.org/book/ch03-02-data-types.html", label: "The Rust Book — Ch 3.2", platform: "docs" }),
       makeTask("p1w1d5", 1, 1, 5, "The Stack & Heap — Mental Model", "Understand how Rust manages memory: stack vs heap, why this matters for ownership. Read Rust Book Ch 4.1.", 4, "reading", { url: "https://doc.rust-lang.org/book/ch04-01-what-is-ownership.html", label: "The Rust Book — Ch 4.1", platform: "docs" }),

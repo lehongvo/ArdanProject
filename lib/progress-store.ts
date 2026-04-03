@@ -12,6 +12,7 @@ export const useProgressStore = create<AppState>()(
       completedPhases: [],
       completedWeeks: [],
       completedTasks: [],
+      completedTaskDates: {},
       taskNotes: {},
       phaseRatings: {} as Record<number, 1 | 2 | 3 | 4 | 5>,
       leetcodeProblems: {},
@@ -32,7 +33,9 @@ export const useProgressStore = create<AppState>()(
         set((state) => {
           if (state.completedTasks.includes(taskId)) return state;
           const completedTasks = [...state.completedTasks, taskId];
-          return { completedTasks, ...updateStreak(state) };
+          const today = new Date().toISOString().split('T')[0];
+          const completedTaskDates = { ...state.completedTaskDates, [taskId]: today };
+          return { completedTasks, completedTaskDates, ...updateStreak(state) };
         }),
 
       completeWeek: (weekId: number) =>

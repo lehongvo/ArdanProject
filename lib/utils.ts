@@ -93,3 +93,24 @@ export function getPhaseBgClass(phaseId: number): string {
 export function generateId(): string {
   return Math.random().toString(36).substring(2, 9)
 }
+
+const VI_DAYS = ['Chủ nhật', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7'];
+
+export function getTaskDate(startDate: string, weekNumber: number, day: number): Date {
+  const start = new Date(startDate);
+  const offset = (weekNumber - 1) * 7 + (day - 1);
+  return new Date(start.getTime() + offset * 86400000);
+}
+
+export function formatViDate(date: Date): string {
+  const dayName = VI_DAYS[date.getDay()];
+  const d = String(date.getDate()).padStart(2, '0');
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  return `${dayName}, ${d}/${m}`;
+}
+
+export function formatShortDate(date: Date): string {
+  const d = String(date.getDate()).padStart(2, '0');
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  return `${d}/${m}`;
+}

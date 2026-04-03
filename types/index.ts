@@ -21,6 +21,10 @@ export interface DailyTask {
   status: TaskStatus;
   completedAt?: string;
   notes?: string;
+  keyPoints?: string[];
+  codeExample?: string;
+  commonMistakes?: string[];
+  practicePrompt?: string;
 }
 
 export interface Phase {
@@ -119,6 +123,7 @@ export interface AppState {
   completedPhases: PhaseId[];
   completedWeeks: number[];
   completedTasks: string[];
+  completedTaskDates: Record<string, string>;
   taskNotes: Record<string, string>;
   phaseRatings: Record<number, 1 | 2 | 3 | 4 | 5>;
   leetcodeProblems: Record<number, { done: boolean; doneAt?: string; notes?: string }>;
