@@ -4424,34 +4424,2784 @@ async function runDemo() {
 
 // ─── Phase 7: 10 Solana Projects (Weeks 29–32) ────────────────────────────────
 const phase7Weeks: Week[] = [
-  makeSimpleWeek(29, 1, 7, "Projects 1–2: Token Launch & NFT Mint", "Build and deploy your first two portfolio projects.",
-    ["Token Launch: SPL token with vesting PDA", "Token Launch: Distribution logic", "Token Launch: Deploy & test devnet", "NFT Mint: Collection initialization", "NFT Mint: Mint instruction with Metaplex", "NFT Mint: Royalties & update auth", "Both projects: README & GitHub"],
-    "docs", "https://solana.com/developers", "Solana Developers", "project"),
-  makeSimpleWeek(30, 2, 7, "Projects 3–5: DEX, Staking, DAO", "Build three mid-complexity DeFi projects.",
-    ["DEX: AMM with constant product", "DEX: Frontend with @solana/wallet-adapter", "Staking: Lock tokens, earn rewards by time", "Staking: Early withdrawal penalty", "DAO: Governance token + proposal creation", "DAO: Vote instruction, quorum check", "DAO: Execution after vote passes"],
-    "docs", "https://solana.com/developers", "Solana Developers", "project"),
-  makeSimpleWeek(31, 3, 7, "Projects 6–8: Escrow, Lending, Lottery", "Build three advanced DeFi projects.",
-    ["Escrow: Safe P2P token swap", "Escrow: Time-locked release", "Lending: Deposit/borrow/repay cycle", "Lending: Interest accrual model", "Lottery: VRF randomness with Switchboard", "Lottery: Ticket purchase & winner selection", "Deploy all three to devnet"],
-    "docs", "https://solana.com/developers", "Solana Developers", "project"),
-  makeSimpleWeek(32, 4, 7, "Projects 9–10: Bridge & ZK+Solana", "Build your most ambitious Solana projects.",
-    ["Bridge: Wormhole SDK integration", "Bridge: Lock-and-mint pattern", "Bridge: Cross-chain message passing", "ZK+Solana: Groth16 verifier on Solana", "ZK+Solana: Private transaction circuit", "ZK+Solana: Full proof pipeline", "Portfolio polish: README, deploy, demo video"],
-    "docs", "https://docs.wormhole.com/", "Wormhole Docs", "project"),
+  // Week 29 — Projects 1-2
+  {
+    weekNumber: 29,
+    phaseWeek: 1,
+    phaseId: 7,
+    title: "Projects 1–2: Token Launch & NFT Mint",
+    goal: "Build and deploy your first two portfolio projects.",
+    isCompleted: false,
+    tasks: [
+      makeTask("p7w1d1", 7, 29, 1, "Token Launch: SPL Token with Vesting PDA", "Build a token launch program: mint authority, initial supply, and vesting schedule locked in a PDA.", 4, "project", { url: "https://solana.com/developers", label: "Solana Developers", platform: "docs" }, {
+        keyPoints: [
+          'VestingSchedule PDA: stores total_amount, released, start_timestamp, cliff, duration',
+          'Cliff period: no tokens releasable until cliff passes (e.g. 1 year)',
+          'Linear vesting after cliff: releasable = total * elapsed_after_cliff / vesting_duration',
+          'Release instruction: calculate releasable, transfer to beneficiary, update released field',
+          'Only beneficiary can call release; admin can revoke unvested tokens',
+        ],
+        codeExample: `#[account]
+pub struct VestingSchedule {
+    pub beneficiary: Pubkey,
+    pub mint: Pubkey,
+    pub vault: Pubkey,            // token vault holding vested tokens
+    pub total_amount: u64,
+    pub released: u64,
+    pub start_timestamp: i64,
+    pub cliff_seconds: i64,       // e.g. 365 * 24 * 3600 = 1 year
+    pub duration_seconds: i64,    // total vesting period after cliff
+    pub revocable: bool,
+    pub bump: u8,
+}
+
+pub fn release(ctx: Context<Release>) -> Result<()> {
+    let schedule = &mut ctx.accounts.schedule;
+    let now = Clock::get()?.unix_timestamp;
+    let cliff_end = schedule.start_timestamp + schedule.cliff_seconds;
+    require!(now >= cliff_end, ErrorCode::CliffNotReached);
+
+    let elapsed = (now - cliff_end).min(schedule.duration_seconds);
+    let vested = (schedule.total_amount as i128 * elapsed as i128
+        / schedule.duration_seconds as i128) as u64;
+    let releasable = vested.saturating_sub(schedule.released);
+    require!(releasable > 0, ErrorCode::NothingToRelease);
+
+    schedule.released += releasable;
+    // CPI: transfer releasable from vault to beneficiary
+    Ok(())
+}`,
+        commonMistakes: [
+          'Using block time (clock.slot) instead of unix_timestamp for vesting — slots are faster than 1/s',
+          'Not storing released amount — recomputing from start allows double-claiming',
+        ],
+        practicePrompt: 'Deploy Token Launch to devnet. Vest 1,000,000 tokens over 4 years with 1-year cliff. Advance clock to cliff, call release, assert ~0 tokens (just cliff). Advance 2 more years, release again, assert ~500k tokens.',
+      }),
+      makeTask("p7w1d2", 7, 29, 2, "Token Launch: Distribution Logic", "Build airdrop distribution with Merkle tree allowlist verification.", 4, "project", { url: "https://solana.com/developers", label: "Solana Developers", platform: "docs" }, {
+        keyPoints: [
+          'Merkle distribution: build a Merkle tree of (address, amount) pairs off-chain',
+          'Store Merkle root on-chain in a DistributorConfig account',
+          'Claim instruction: verify Merkle proof, mint tokens, mark as claimed',
+          'ClaimRecord PDA: seeds = ["claimed", distributor, claimant] prevents double-claiming',
+          'Use @solana/spl-account-compression for large allowlists (> 10,000 addresses)',
+        ],
+        codeExample: `use solana_program::keccak;
+
+pub fn claim(
+    ctx: Context<Claim>,
+    amount: u64,
+    proof: Vec<[u8; 32]>,
+) -> Result<()> {
+    require!(!ctx.accounts.claim_record.claimed, ErrorCode::AlreadyClaimed);
+
+    // Verify Merkle proof
+    let leaf = keccak::hashv(&[
+        ctx.accounts.claimant.key().as_ref(),
+        &amount.to_le_bytes(),
+    ]).to_bytes();
+
+    let root = ctx.accounts.distributor.merkle_root;
+    let computed_root = compute_merkle_root(leaf, proof);
+    require!(computed_root == root, ErrorCode::InvalidMerkleProof);
+
+    // Mint tokens to claimant
+    ctx.accounts.claim_record.claimed = true;
+    // CPI: mint amount tokens to claimant ATA
+    Ok(())
+}
+
+fn compute_merkle_root(leaf: [u8; 32], proof: Vec<[u8; 32]>) -> [u8; 32] {
+    proof.iter().fold(leaf, |acc, sibling| {
+        if acc <= *sibling {
+            keccak::hashv(&[&acc, sibling]).to_bytes()
+        } else {
+            keccak::hashv(&[sibling, &acc]).to_bytes()
+        }
+    })
+}`,
+        commonMistakes: [
+          'Not using a ClaimRecord PDA — without it, same address can claim multiple times in different transactions',
+          'Building Merkle tree with sorted leaves wrong — leaf ordering must match exactly between on-chain and off-chain generation',
+        ],
+        practicePrompt: 'Build a 100-address Merkle airdrop. Deploy to devnet. Claim from 3 different addresses. Assert double-claim fails. Write GitHub README with contract address and claim instructions.',
+      }),
+      makeTask("p7w1d3", 7, 29, 3, "Token Launch: Deploy & Test Devnet", "Deploy Token Launch project to devnet and write the GitHub README.", 4, "project", { url: "https://solana.com/developers", label: "Solana Developers", platform: "docs" }, {
+        keyPoints: [
+          'anchor deploy: pushes compiled .so to devnet network',
+          'Verify on Solana Explorer: program account shows correct upgrade authority',
+          'Test all instruction paths with real devnet SOL (not localnet)',
+          'GitHub README: project overview, architecture diagram, deployment address, test instructions',
+          'Add repository topics: solana, anchor, token, vesting, airdrop',
+        ],
+        codeExample: `# Token Launch Deployment Checklist
+
+# 1. Build verifiable
+anchor build --verifiable
+
+# 2. Deploy
+anchor deploy --provider.cluster devnet
+
+# 3. Verify program ID matches Declare_id! in lib.rs
+solana program show <PROGRAM_ID> --url devnet
+
+# 4. Run devnet tests
+ANCHOR_PROVIDER_URL=https://api.devnet.solana.com anchor test --skip-local-validator
+
+# 5. Devnet testing checklist:
+# [ ] Initialize vesting schedule with real token mint
+# [ ] Advance clock using set_clock (devnet doesn't allow this — use localnet for time tests)
+# [ ] Execute airdrop claim with 3 different wallets
+# [ ] Verify Solana Explorer shows correct program events
+
+# README template structure:
+# ## Token Launch Program
+# **Deployed:** devnet — <PROGRAM_ID>
+# ## Architecture: [diagram]
+# ## Instructions: initialize_vesting, release, claim_airdrop
+# ## Testing: anchor test`,
+        commonMistakes: [
+          'Deploying without updating program ID in declare_id!() — results in a deployed program that rejects all instructions',
+          'Not airdropping test SOL before running devnet tests — instructions fail with insufficient funds',
+        ],
+        practicePrompt: 'Complete deployment. Share the Solana Explorer link to your deployed program. Commit README to GitHub. Ask a friend to claim from your airdrop using only the README instructions.',
+      }),
+      makeTask("p7w1d4", 7, 29, 4, "NFT Mint: Collection Initialization", "Initialize a Metaplex collection for your NFT project.", 4, "project", { url: "https://developers.metaplex.com/", label: "Metaplex Developers", platform: "custom" }, {
+        keyPoints: [
+          'Collection NFT is a master NFT whose mint key identifies the collection',
+          'CollectionDetails::V1 { size: 0 } enables on-chain size tracking',
+          'Collection metadata: name = "My Collection", symbol = "MC", URI = IPFS JSON',
+          'Master edition: max_supply = Some(0) means no prints from this NFT',
+          'collection.json: { name, description, image, external_url, seller_fee_basis_points }',
+        ],
+        codeExample: `// Collection initialization using Metaplex JS SDK (v3)
+import { createNft, mplTokenMetadata } from "@metaplex-foundation/mpl-token-metadata";
+import { createUmi } from "@metaplex-foundation/umi-bundle-defaults";
+import { generateSigner, percentAmount } from "@metaplex-foundation/umi";
+
+const umi = createUmi("https://api.devnet.solana.com").use(mplTokenMetadata());
+
+// Create collection NFT
+const collectionMint = generateSigner(umi);
+await createNft(umi, {
+    mint: collectionMint,
+    name: "Ardan Labs NFT Collection",
+    symbol: "ARDAN",
+    uri: "https://arweave.net/your-collection-metadata",
+    sellerFeeBasisPoints: percentAmount(5, 2), // 5% royalty
+    isCollection: true,  // marks as collection root
+}).sendAndConfirm(umi);
+
+console.log("Collection mint:", collectionMint.publicKey);`,
+        commonMistakes: [
+          'Not setting isCollection: true — NFT is created but not recognized as a collection root by marketplaces',
+          'Using a centralized URI (HTTPS server) — collection metadata disappears if server goes down',
+        ],
+        practicePrompt: 'Deploy collection NFT to devnet. Upload collection JSON to IPFS. Verify collection appears on Magic Eden devnet explorer with correct name and image.',
+      }),
+      makeTask("p7w1d5", 7, 29, 5, "NFT Mint: Mint Instruction with Metaplex", "Build a candy-machine-style mint instruction for your NFT collection.", 4, "project", { url: "https://developers.metaplex.com/", label: "Metaplex Developers", platform: "custom" }, {
+        keyPoints: [
+          'MintConfig PDA: price, max_supply, current_supply, start_time, end_time, collection_mint',
+          'Mint instruction: check time window, check supply, collect SOL, mint NFT + verify collection',
+          'Random metadata selection: use slot hash + counter for pseudo-random URI index',
+          'Whitelist mint: Merkle proof required before public mint opens',
+          'Treasury receives SOL from each mint; authority can harvest at any time',
+        ],
+        codeExample: `#[account]
+pub struct MintConfig {
+    pub authority: Pubkey,
+    pub collection_mint: Pubkey,
+    pub treasury: Pubkey,
+    pub price: u64,
+    pub max_supply: u32,
+    pub current_supply: u32,
+    pub start_time: i64,
+    pub end_time: i64,
+    pub bump: u8,
+}
+
+pub fn mint_nft(ctx: Context<MintNft>) -> Result<()> {
+    let config = &mut ctx.accounts.config;
+    let now = Clock::get()?.unix_timestamp;
+
+    require!(now >= config.start_time, ErrorCode::MintNotStarted);
+    require!(now <= config.end_time, ErrorCode::MintEnded);
+    require!(config.current_supply < config.max_supply, ErrorCode::SoldOut);
+
+    // Collect mint price
+    system_program::transfer(
+        CpiContext::new(ctx.accounts.system_program.to_account_info(), Transfer {
+            from: ctx.accounts.buyer.to_account_info(),
+            to: ctx.accounts.treasury.to_account_info(),
+        }),
+        config.price,
+    )?;
+
+    config.current_supply += 1;
+    let index = config.current_supply;
+    let uri = format!("https://arweave.net/collection/{}.json", index);
+
+    // Mint NFT + verify collection (CPI to token metadata)
+    Ok(())
+}`,
+        commonMistakes: [
+          'Using sequential IDs without randomness — bots can predict which index has rare traits and snipe specific NFTs',
+          'Not checking end_time — mints after the sale window should be rejected',
+        ],
+        practicePrompt: 'Deploy to devnet. Mint 5 NFTs from 3 different wallets. Verify all appear in the collection on Solana Explorer. Assert minting after end_time fails.',
+      }),
+      makeTask("p7w1d6", 7, 29, 6, "NFT Mint: Royalties & Update Auth", "Configure royalties, update authority, and freeze mechanisms for your NFT collection.", 4, "project", { url: "https://developers.metaplex.com/", label: "Metaplex Developers", platform: "custom" }, {
+        keyPoints: [
+          'Set seller_fee_basis_points = 500 (5%) in metadata for marketplace royalties',
+          'Update authority retained by program PDA enables on-chain evolution (level-up, etc.)',
+          'is_mutable = true initially, freeze metadata after art reveal',
+          'Reveal: pre-mint with placeholder URI, post-mint batch-update to real URIs',
+          'Royalty enforcement: use pNFT (TokenStandard::ProgrammableNonFungible) for on-chain enforcement',
+        ],
+        codeExample: `// Batch reveal: update all NFT URIs after mint is complete
+pub fn reveal_nft(
+    ctx: Context<RevealNft>,
+    final_uri: String,
+    make_immutable: bool,
+) -> Result<()> {
+    // Update authority is program PDA — revealed by program authority instruction
+    let ix = update_metadata_accounts_v2(
+        ctx.accounts.metadata_program.key(),
+        ctx.accounts.metadata.key(),
+        ctx.accounts.update_authority_pda.key(),
+        None,
+        Some(DataV2 {
+            name: ctx.accounts.metadata_account.data.name.clone(),
+            symbol: ctx.accounts.metadata_account.data.symbol.clone(),
+            uri: final_uri,
+            seller_fee_basis_points: 500,
+            creators: None,
+            collection: None,
+            uses: None,
+        }),
+        Some(!make_immutable), // is_mutable = false when revealing final art
+        None,
+    );
+    invoke_signed(&ix, &[/* ... */], &[/* pda_seeds */])?;
+    Ok(())
+}`,
+        commonMistakes: [
+          'Making metadata immutable before reveal — cannot update URIs post-launch if metadata is frozen',
+          'Keeping update authority as a single EOA — if key is lost, metadata can never be updated or frozen',
+        ],
+        practicePrompt: 'Add a reveal instruction to your NFT mint program. Mint 10 NFTs with placeholder URIs. Batch reveal all 10 in a single instruction (use remaining_accounts for all metadata accounts).',
+      }),
+      makeTask("p7w1d7", 7, 29, 7, "Both Projects: README & GitHub", "Polish both projects and publish to GitHub as portfolio pieces.", 4, "project", { url: "https://solana.com/developers", label: "Solana Developers", platform: "docs" }, {
+        keyPoints: [
+          'README structure: badges, overview, architecture, instructions list, testing, deployment',
+          'Architecture diagram: draw.io or Excalidraw showing accounts + instruction flows',
+          'Add GitHub topics for discoverability: solana, anchor, rust, nft, defi, web3',
+          'CI/CD: GitHub Actions running anchor test on every push',
+          'Live demo: deployed devnet program ID prominently displayed',
+        ],
+        codeExample: `# Example GitHub Actions CI for Anchor project
+# .github/workflows/ci.yml
+
+name: Anchor Tests
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+      - name: Install Solana
+        run: |
+          sh -c "$(curl -sSfL https://release.solana.com/v1.18.0/install)"
+          echo "$HOME/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
+      - name: Install Anchor
+        run: cargo install --git https://github.com/coral-xyz/anchor --tag v0.30.1 anchor-cli --locked
+      - name: Run tests
+        run: anchor test`,
+        commonMistakes: [
+          'README with no architecture diagram — reviewers cannot understand the program without a visual',
+          'Not adding a CI badge to README — signals to employers that you care about code quality',
+        ],
+        practicePrompt: 'Set up GitHub Actions CI for both projects. Both must pass anchor test in CI. Add CI badge to README. Star both repos and share links in a portfolio document.',
+      }),
+    ],
+  },
+
+  // Week 30 — Projects 3-5
+  {
+    weekNumber: 30,
+    phaseWeek: 2,
+    phaseId: 7,
+    title: "Projects 3–5: DEX, Staking, DAO",
+    goal: "Build three mid-complexity DeFi projects.",
+    isCompleted: false,
+    tasks: [
+      makeTask("p7w2d1", 7, 30, 1, "DEX: AMM with Constant Product", "Build a production-quality AMM DEX using the foundation from Phase 6.", 4, "project", { url: "https://solana.com/developers", label: "Solana Developers", platform: "docs" }, {
+        keyPoints: [
+          'Reuse Phase 6 AMM code — refactor into a clean, deployable program',
+          'Add multi-pool support: one program handles multiple pools via PDAs',
+          'Pool registry: PoolRegistry PDA listing all initialized pools',
+          'Price discovery: expose get_price view function for frontend consumption',
+          'Route swaps: single-hop and two-hop (A→B→C) routing',
+        ],
+        codeExample: `// Multi-pool routing: swap A -> B -> C via two hops
+pub fn swap_two_hop(
+    ctx: Context<SwapTwoHop>,
+    amount_in: u64,
+    min_amount_out: u64,
+) -> Result<()> {
+    // Hop 1: A -> B
+    let intermediate_amount = execute_swap(
+        &mut ctx.accounts.pool_ab,
+        amount_in,
+        0, // no slippage check on intermediate
+    )?;
+
+    // Hop 2: B -> C
+    let amount_out = execute_swap(
+        &mut ctx.accounts.pool_bc,
+        intermediate_amount,
+        min_amount_out, // slippage check on final output
+    )?;
+
+    emit!(TwoHopSwapEvent {
+        token_in: ctx.accounts.token_a.key(),
+        token_out: ctx.accounts.token_c.key(),
+        amount_in,
+        intermediate_amount,
+        amount_out,
+    });
+    Ok(())
+}`,
+        commonMistakes: [
+          'Not adding slippage protection on the final hop of multi-hop routes — intermediate amounts can be manipulated',
+          'Forgetting to add the DEX to a pool registry — frontends cannot discover pools without an index',
+        ],
+        practicePrompt: 'Deploy DEX to devnet with 3 pools: SOL/USDC, SOL/BONK, USDC/BONK. Implement 2-hop routing. Verify a BONK→USDC direct swap and a BONK→SOL→USDC route give similar prices.',
+      }),
+      makeTask("p7w2d2", 7, 30, 2, "DEX: Frontend with @solana/wallet-adapter", "Build a minimal Next.js frontend for your DEX.", 4, "project", { url: "https://solana.com/developers", label: "Solana Developers", platform: "docs" }, {
+        keyPoints: [
+          '@solana/wallet-adapter-react provides WalletProvider and useWallet hook',
+          'useAnchorProgram hook: wraps program IDL and connection',
+          'Display pool reserves and spot price in real-time (1-second polling or websocket)',
+          'Swap form: input amount, auto-compute output via get_price, slippage slider',
+          'Transaction confirmation: show spinner, then success/error toast',
+        ],
+        codeExample: `// Next.js DEX swap component
+"use client";
+import { useWallet } from "@solana/wallet-adapter-react";
+import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
+import { useAnchorProgram } from "@/hooks/useAnchorProgram";
+import { BN } from "@coral-xyz/anchor";
+
+export function SwapWidget() {
+  const { publicKey, sendTransaction } = useWallet();
+  const { program } = useAnchorProgram();
+  const [amountIn, setAmountIn] = useState("");
+  const [estimatedOut, setEstimatedOut] = useState(0);
+
+  const onSwap = async () => {
+    const tx = await program.methods
+      .swap(new BN(parseFloat(amountIn) * 1e6), new BN(0))
+      .accounts({ pool: POOL_PDA, /* ... */ })
+      .transaction();
+    const sig = await sendTransaction(tx, connection);
+    await connection.confirmTransaction(sig);
+    toast.success("Swapped successfully!");
+  };
+
+  return (
+    <div>
+      <WalletMultiButton />
+      <input value={amountIn} onChange={e => setAmountIn(e.target.value)} />
+      <p>You receive: {estimatedOut} tokens</p>
+      <button onClick={onSwap} disabled={!publicKey}>Swap</button>
+    </div>
+  );
+}`,
+        commonMistakes: [
+          'Not handling wallet disconnect gracefully — program calls with null publicKey throw unhandled errors',
+          'Polling reserves too frequently — 1-second polling on mainnet costs RPC credits; use WebSocket subscriptions',
+        ],
+        practicePrompt: 'Deploy the frontend to Vercel. Share the URL. The swap must work end-to-end: connect wallet, enter amount, swap, see confirmation. Record a 30-second screen recording.',
+      }),
+      makeTask("p7w2d3", 7, 30, 3, "Staking: Lock Tokens, Earn Rewards by Time", "Build a staking program where users lock tokens and earn proportional rewards over time.", 4, "project", { url: "https://solana.com/developers", label: "Solana Developers", platform: "docs" }, {
+        keyPoints: [
+          'Staking pool tracks: total_staked, reward_per_token_stored, last_update_time',
+          'reward_per_token_stored increases each slot: += reward_rate * elapsed / total_staked',
+          'UserStake PDA: amount, reward_per_token_paid, rewards_pending',
+          'Claim: pending = (rpt_stored - rpt_paid) * staked_amount + rewards_pending',
+          'Compound: auto-stake claimed rewards in same instruction',
+        ],
+        codeExample: `#[account]
+pub struct StakingPool {
+    pub reward_mint: Pubkey,
+    pub stake_mint: Pubkey,
+    pub reward_rate: u64,          // reward tokens per slot
+    pub reward_per_token_stored: u128, // scaled by 1e18
+    pub total_staked: u64,
+    pub last_update_slot: u64,
+    pub bump: u8,
+}
+
+fn update_reward(pool: &mut StakingPool) -> Result<()> {
+    let slot = Clock::get()?.slot;
+    let elapsed = slot.saturating_sub(pool.last_update_slot);
+    if pool.total_staked > 0 && elapsed > 0 {
+        let reward_per_token_delta = (pool.reward_rate as u128)
+            .checked_mul(elapsed as u128).unwrap()
+            .checked_mul(1_000_000_000_000_000_000u128).unwrap()
+            / pool.total_staked as u128;
+        pool.reward_per_token_stored = pool.reward_per_token_stored
+            .saturating_add(reward_per_token_delta);
+    }
+    pool.last_update_slot = slot;
+    Ok(())
+}
+
+fn earned(pool: &StakingPool, user: &UserStake) -> u64 {
+    ((user.amount as u128)
+        .checked_mul(pool.reward_per_token_stored
+            .saturating_sub(user.reward_per_token_paid)).unwrap()
+        / 1_000_000_000_000_000_000u128) as u64
+    + user.rewards_pending
+}`,
+        commonMistakes: [
+          'Computing rewards using timestamps instead of slots — timestamps can be manipulated by validators',
+          'Not calling update_reward before any state change — users can get extra rewards if rpt is stale',
+        ],
+        practicePrompt: 'Deploy staking program. User A stakes 1000 tokens. Advance 100 slots. User B stakes 1000. Advance 100 more slots. Assert A earned ~2x more rewards than B.',
+      }),
+      makeTask("p7w2d4", 7, 30, 4, "Staking: Early Withdrawal Penalty", "Add penalty mechanisms and locked staking tiers to the staking program.", 4, "project", { url: "https://solana.com/developers", label: "Solana Developers", platform: "docs" }, {
+        keyPoints: [
+          'Lock period: user chooses 30/90/180 day lock for a multiplier bonus (1x/1.5x/2x)',
+          'Early unstake penalty: if unstaking before lock_end, penalty = 20% of staked amount',
+          'Penalty goes to insurance fund or is burned (reduces supply)',
+          'VeToken model: voting power = staked_amount * time_remaining / max_lock',
+          'Lock extension: user can extend lock to increase multiplier',
+        ],
+        codeExample: `#[account]
+pub struct UserStake {
+    pub owner: Pubkey,
+    pub amount: u64,
+    pub lock_end: i64,          // Unix timestamp when lock expires
+    pub lock_multiplier: u64,   // 10000 = 1x, 15000 = 1.5x, 20000 = 2x
+    pub reward_per_token_paid: u128,
+    pub rewards_pending: u64,
+    pub bump: u8,
+}
+
+pub fn unstake(ctx: Context<Unstake>, amount: u64) -> Result<()> {
+    let user = &mut ctx.accounts.user_stake;
+    let pool = &mut ctx.accounts.pool;
+    let now = Clock::get()?.unix_timestamp;
+
+    update_reward(pool)?;
+    let pending = earned(pool, user);
+    user.rewards_pending = 0;
+    user.reward_per_token_paid = pool.reward_per_token_stored;
+
+    let (actual_amount, penalty) = if now < user.lock_end {
+        let penalty = amount * 2000 / 10000; // 20% penalty
+        (amount - penalty, penalty)
+    } else {
+        (amount, 0)
+    };
+
+    user.amount -= amount;
+    pool.total_staked -= amount;
+    // Transfer actual_amount to user
+    // Transfer penalty to insurance_fund
+    Ok(())
+}`,
+        commonMistakes: [
+          'Applying penalty to rewards instead of principal — only principal should be penalized for early withdrawal',
+          'Not handling lock extension — if user cannot extend, they must unstake and re-stake losing their lock progress',
+        ],
+        practicePrompt: 'Write three staking tests: (1) 180-day lock earns 2x rewards. (2) Early unstake loses 20%. (3) Unstake after lock period: no penalty, full rewards. Deploy to devnet.',
+      }),
+      makeTask("p7w2d5", 7, 30, 5, "DAO: Governance Token + Proposal Creation", "Build an on-chain DAO with token-weighted governance and proposal creation.", 4, "project", { url: "https://solana.com/developers", label: "Solana Developers", platform: "docs" }, {
+        keyPoints: [
+          'Governance token holders create proposals by locking tokens as deposit',
+          'Proposal PDA: title, description_uri, instruction_data, voting_start, voting_end, for_votes, against_votes',
+          'Quorum: minimum total votes required for proposal to be valid (e.g. 10% of supply)',
+          'Proposal deposit returned when proposal is executed or cancelled',
+          'Only token holders (above threshold) can create proposals',
+        ],
+        codeExample: `#[account]
+pub struct Proposal {
+    pub proposer: Pubkey,
+    pub dao: Pubkey,
+    pub title: String,             // max 64 chars
+    pub description_uri: String,   // IPFS link to full description
+    pub instruction_data: Vec<u8>, // serialized instruction to execute
+    pub target_program: Pubkey,
+    pub for_votes: u64,
+    pub against_votes: u64,
+    pub voting_start: i64,
+    pub voting_end: i64,
+    pub executed: bool,
+    pub cancelled: bool,
+    pub deposit: u64,              // governance tokens locked
+    pub bump: u8,
+}
+
+pub fn create_proposal(
+    ctx: Context<CreateProposal>,
+    title: String,
+    description_uri: String,
+    instruction_data: Vec<u8>,
+    voting_duration: i64,
+) -> Result<()> {
+    let dao = &ctx.accounts.dao;
+    let token_balance = ctx.accounts.proposer_token_account.amount;
+    require!(
+        token_balance >= dao.proposal_threshold,
+        ErrorCode::InsufficientTokensToPropose
+    );
+    // Lock deposit tokens, initialize proposal
+    Ok(())
+}`,
+        commonMistakes: [
+          'No proposal deposit — spam proposals overwhelm voters; require token lockup to create',
+          'No quorum check — 3 votes on a proposal with 1M supply should not pass',
+        ],
+        practicePrompt: 'Create a DAO with 1000 token supply, proposal_threshold=10 tokens, quorum=10%. Create a proposal to change fee_bps to 100. Deploy to devnet.',
+      }),
+      makeTask("p7w2d6", 7, 30, 6, "DAO: Vote Instruction, Quorum Check", "Implement the vote instruction with delegation and snapshot-based power.", 4, "project", { url: "https://solana.com/developers", label: "Solana Developers", platform: "docs" }, {
+        keyPoints: [
+          'VoteRecord PDA: voter, proposal, vote (For/Against), weight — prevents double voting',
+          'Vote weight = token_balance at proposal creation snapshot (not current balance)',
+          'Delegation: delegate voting power to another address',
+          'Quorum check: (for_votes + against_votes) / total_supply >= quorum_bps',
+          'Time check: voting must be within [voting_start, voting_end]',
+        ],
+        codeExample: `pub fn cast_vote(
+    ctx: Context<CastVote>,
+    vote: VoteChoice, // For or Against
+) -> Result<()> {
+    let proposal = &mut ctx.accounts.proposal;
+    let now = Clock::get()?.unix_timestamp;
+    require!(now >= proposal.voting_start, ErrorCode::VotingNotStarted);
+    require!(now <= proposal.voting_end, ErrorCode::VotingEnded);
+    require!(!ctx.accounts.vote_record.voted, ErrorCode::AlreadyVoted);
+
+    let vote_weight = ctx.accounts.voter_token_account.amount;
+    require!(vote_weight > 0, ErrorCode::NoVotingPower);
+
+    match vote {
+        VoteChoice::For => proposal.for_votes += vote_weight,
+        VoteChoice::Against => proposal.against_votes += vote_weight,
+    }
+    ctx.accounts.vote_record.voted = true;
+    ctx.accounts.vote_record.vote = vote;
+    ctx.accounts.vote_record.weight = vote_weight;
+    emit!(VoteCastEvent {
+        voter: ctx.accounts.voter.key(),
+        proposal: proposal.key(),
+        vote,
+        weight: vote_weight,
+    });
+    Ok(())
+}`,
+        commonMistakes: [
+          'Using current token balance instead of snapshot — users can vote then sell tokens, allowing double influence',
+          'Not requiring VoteRecord PDA — users can vote multiple times from different ATAs',
+        ],
+        practicePrompt: 'Write DAO voting tests: 3 voters with different weights vote. Verify for_votes/against_votes are correct. Try double-voting (should fail). Check quorum pass/fail.',
+      }),
+      makeTask("p7w2d7", 7, 30, 7, "DAO: Execution After Vote Passes", "Implement proposal execution: verify quorum, verify For > Against, execute stored instruction.", 4, "project", { url: "https://solana.com/developers", label: "Solana Developers", platform: "docs" }, {
+        keyPoints: [
+          'Execution check: proposal.voting_end passed, quorum met, for_votes > against_votes',
+          'Execute stored instruction_data via CPI to target_program',
+          'One-time execution: set proposal.executed = true before CPI to prevent re-execution',
+          'Proposal expiry: proposals can be cancelled if not executed within expiry_time after voting_end',
+          'Return deposit to proposer upon successful execution',
+        ],
+        codeExample: `pub fn execute_proposal(ctx: Context<ExecuteProposal>) -> Result<()> {
+    let proposal = &mut ctx.accounts.proposal;
+    let dao = &ctx.accounts.dao;
+    let now = Clock::get()?.unix_timestamp;
+
+    require!(!proposal.executed, ErrorCode::AlreadyExecuted);
+    require!(now > proposal.voting_end, ErrorCode::VotingStillActive);
+
+    // Quorum check
+    let total_votes = proposal.for_votes + proposal.against_votes;
+    let quorum_threshold = dao.total_supply * dao.quorum_bps / 10000;
+    require!(total_votes >= quorum_threshold, ErrorCode::QuorumNotMet);
+
+    // Majority check
+    require!(proposal.for_votes > proposal.against_votes, ErrorCode::ProposalRejected);
+
+    // Mark executed BEFORE CPI (prevent reentrancy)
+    proposal.executed = true;
+
+    // Execute the stored instruction
+    let ix = solana_program::instruction::Instruction {
+        program_id: proposal.target_program,
+        accounts: vec![/* ... from remaining_accounts */],
+        data: proposal.instruction_data.clone(),
+    };
+    invoke_signed(&ix, &ctx.remaining_accounts, &[/* dao seeds */])?;
+
+    // Return deposit to proposer
+    Ok(())
+}`,
+        commonMistakes: [
+          'Setting executed = true after CPI — allows reentrancy to execute the proposal multiple times',
+          'Not returning deposit — proposer permanently loses tokens even on successful proposals',
+        ],
+        practicePrompt: 'Complete the full DAO lifecycle test: create proposal, vote with quorum, execute. The stored instruction should update a protocol fee. Verify fee changed after execution.',
+      }),
+    ],
+  },
+
+  // Week 31 — Projects 6-8
+  {
+    weekNumber: 31,
+    phaseWeek: 3,
+    phaseId: 7,
+    title: "Projects 6–8: Escrow, Lending, Lottery",
+    goal: "Build three advanced DeFi projects.",
+    isCompleted: false,
+    tasks: [
+      makeTask("p7w3d1", 7, 31, 1, "Escrow: Safe P2P Token Swap", "Build a trustless escrow for swapping two different tokens between two parties.", 4, "project", { url: "https://solana.com/developers", label: "Solana Developers", platform: "docs" }, {
+        keyPoints: [
+          'Maker deposits token A into escrow PDA; taker sends token B in exchange',
+          'EscrowState PDA: maker, taker (optional — if null, anyone can take), token_a, amount_a, token_b, amount_b',
+          'If taker is specified, only that address can complete the swap',
+          'Partial fill: allow taker to fulfill any fraction, return remainder to maker',
+          'Expiry: maker can cancel and reclaim after expiry_timestamp',
+        ],
+        codeExample: `#[account]
+pub struct EscrowState {
+    pub maker: Pubkey,
+    pub taker: Option<Pubkey>,     // None = permissionless
+    pub token_a_mint: Pubkey,
+    pub token_b_mint: Pubkey,
+    pub token_a_amount: u64,       // deposited by maker
+    pub token_b_amount: u64,       // expected from taker
+    pub expiry: i64,               // 0 = no expiry
+    pub bump: u8,
+    pub vault_bump: u8,
+}
+
+pub fn make_offer(
+    ctx: Context<MakeOffer>,
+    token_a_amount: u64,
+    token_b_amount: u64,
+    taker: Option<Pubkey>,
+    expiry: i64,
+) -> Result<()> {
+    let escrow = &mut ctx.accounts.escrow;
+    escrow.maker = ctx.accounts.maker.key();
+    escrow.taker = taker;
+    escrow.token_a_amount = token_a_amount;
+    escrow.token_b_amount = token_b_amount;
+    escrow.expiry = expiry;
+
+    // Transfer token A from maker to vault
+    token::transfer(/* CpiContext */, token_a_amount)?;
+    Ok(())
+}
+
+pub fn take_offer(ctx: Context<TakeOffer>) -> Result<()> {
+    let escrow = &ctx.accounts.escrow;
+    if let Some(taker) = escrow.taker {
+        require!(taker == ctx.accounts.taker.key(), ErrorCode::WrongTaker);
+    }
+    if escrow.expiry > 0 {
+        require!(Clock::get()?.unix_timestamp < escrow.expiry, ErrorCode::EscrowExpired);
+    }
+    // Transfer token B from taker to maker
+    // Transfer token A from vault to taker
+    // Close escrow + vault accounts
+    Ok(())
+}`,
+        commonMistakes: [
+          'Not closing the vault account after completion — leaves rent-funded token accounts orphaned on-chain',
+          'Not verifying token_b_mint matches expected — taker could send a worthless token',
+        ],
+        practicePrompt: 'Deploy escrow to devnet. Test 3 scenarios: (1) permissioned taker succeeds. (2) wrong taker fails. (3) maker cancels after expiry. Record all txn signatures.',
+      }),
+      makeTask("p7w3d2", 7, 31, 2, "Escrow: Time-Locked Release", "Add time-lock to escrow: released only after a specific date or after conditions are met.", 4, "project", { url: "https://solana.com/developers", label: "Solana Developers", platform: "docs" }, {
+        keyPoints: [
+          'Time-lock use cases: vesting, delayed payment, trust-minimized OTC deals',
+          'release_time: Unix timestamp; release only allowed after this time',
+          'Conditional release: oracle price condition (e.g., release if SOL > $200)',
+          'Dispute resolution: arbitrator key can force-release or refund before time-lock',
+          'Stream payments: release proportional amount at each call based on elapsed time',
+        ],
+        codeExample: `pub struct TimeLockEscrow {
+    pub beneficiary: Pubkey,
+    pub depositor: Pubkey,
+    pub arbitrator: Option<Pubkey>,
+    pub amount: u64,
+    pub release_time: i64,
+    pub condition: ReleaseCondition,
+    pub bump: u8,
+}
+
+pub enum ReleaseCondition {
+    TimeOnly,
+    OraclePriceAbove { oracle: Pubkey, threshold: u64 },
+    Streaming { start: i64, end: i64, released: u64 },
+}
+
+pub fn release(ctx: Context<Release>) -> Result<()> {
+    let escrow = &mut ctx.accounts.escrow;
+    let now = Clock::get()?.unix_timestamp;
+
+    let releasable = match &escrow.condition {
+        ReleaseCondition::TimeOnly => {
+            require!(now >= escrow.release_time, ErrorCode::TooEarly);
+            escrow.amount
+        },
+        ReleaseCondition::Streaming { start, end, released } => {
+            let elapsed = (now - start).max(0).min(end - start);
+            let total_duration = end - start;
+            let vested = escrow.amount * elapsed as u64 / total_duration as u64;
+            vested.saturating_sub(*released)
+        },
+        ReleaseCondition::OraclePriceAbove { oracle, threshold } => {
+            let price = get_pyth_price(/* oracle account */)?;
+            require!(price >= *threshold, ErrorCode::ConditionNotMet);
+            escrow.amount
+        },
+    };
+    // transfer releasable to beneficiary
+    Ok(())
+}`,
+        commonMistakes: [
+          'Not handling the streaming case: returning 0 when nothing new to release should be a no-op, not an error',
+          'Missing arbitrator — without dispute resolution, either party can be locked out by bad faith',
+        ],
+        practicePrompt: 'Implement streaming escrow: 1000 tokens over 100 slots. At slot 50, release and assert ~500 tokens released. At slot 100, release remaining ~500. Assert total = 1000.',
+      }),
+      makeTask("p7w3d3", 7, 31, 3, "Lending: Deposit/Borrow/Repay Cycle", "Build a simplified lending protocol optimized for portfolio clarity.", 4, "project", { url: "https://solana.com/developers", label: "Solana Developers", platform: "docs" }, {
+        keyPoints: [
+          'Refactor Phase 6 lending into a clean standalone project with minimal dependencies',
+          'Focus: deposit USDC, borrow SOL against USDC collateral',
+          'Use a simplified linear interest model (no kinked curve) for clarity',
+          'Integrate mock oracle for tests, real Pyth for devnet',
+          'Clean TypeScript SDK: LendingClient class with deposit/borrow/repay/withdraw methods',
+        ],
+        codeExample: `// TypeScript SDK for lending protocol
+export class LendingClient {
+    constructor(
+        private program: Program<Lending>,
+        private connection: Connection,
+    ) {}
+
+    async deposit(poolPda: PublicKey, amount: BN): Promise<string> {
+        const [userPositionPda] = PublicKey.findProgramAddressSync(
+            [Buffer.from("position"), poolPda.toBuffer(), this.wallet.publicKey.toBuffer()],
+            this.program.programId
+        );
+        return this.program.methods
+            .deposit(amount)
+            .accounts({ pool: poolPda, userPosition: userPositionPda })
+            .rpc();
+    }
+
+    async getHealthFactor(userPositionPda: PublicKey): Promise<number> {
+        const position = await this.program.account.userPosition.fetch(userPositionPda);
+        const pool = await this.program.account.lendingPool.fetch(position.pool);
+        // compute health factor
+        return position.collateralValue.toNumber() * pool.liquidationThreshold.toNumber()
+            / position.borrowedAmount.toNumber() / 10000;
+    }
+}`,
+        commonMistakes: [
+          'Not building a TypeScript SDK — raw Anchor program calls are unusable by non-Rust developers',
+          'Skipping mock oracle — tests that require real Pyth feeds cannot run in CI',
+        ],
+        practicePrompt: 'Build LendingClient TypeScript class with all 4 methods. Write integration tests using the SDK (not raw program.methods). Deploy to devnet and document SDK usage in README.',
+      }),
+      makeTask("p7w3d4", 7, 31, 4, "Lending: Interest Accrual Model", "Implement and visualize the compound interest model for the lending protocol.", 4, "project", { url: "https://solana.com/developers", label: "Solana Developers", platform: "docs" }, {
+        keyPoints: [
+          'APY vs APR: APR = periodic_rate * periods, APY = (1 + periodic_rate)^periods - 1',
+          'Compound interest: borrow_index grows multiplicatively each slot',
+          'Simulate 1 year of interest accrual and plot utilization vs rate curve',
+          'Rate snapshots: store borrow_rate at regular intervals for APY calculation',
+          'Expose getAPR() and getAPY() in the TypeScript SDK',
+        ],
+        codeExample: `// Simulate interest accrual over time
+function simulateInterest(
+    initialDeposit: number,
+    initialBorrow: number,
+    baseRate: number,   // annual bps
+    daysToSimulate: number
+): { day: number, debt: number, depositValue: number }[] {
+    const slotsPerDay = 2 * 3600 * 24; // 2 slots/second
+    let borrowIndex = 1e18;
+    let totalDeposits = initialDeposit;
+    let totalBorrows = initialBorrow;
+    const results = [];
+
+    for (let day = 0; day <= daysToSimulate; day++) {
+        const utilization = totalBorrows / totalDeposits;
+        const annualRateBps = baseRate + utilization * 800; // slope=800
+        const slotRate = annualRateBps / 10000 / (365 * slotsPerDay);
+        borrowIndex *= (1 + slotRate * slotsPerDay);
+
+        results.push({
+            day,
+            debt: initialBorrow * borrowIndex / 1e18,
+            depositValue: totalDeposits + (totalBorrows * (borrowIndex / 1e18 - 1))
+        });
+    }
+    return results;
+}`,
+        commonMistakes: [
+          'Confusing APR with APY in documentation — compound interest makes APY significantly higher than APR at high rates',
+          'Not simulating the interest model before deploying — unexpected rate behavior can cause bad debt',
+        ],
+        practicePrompt: 'Plot your interest model: utilization (x-axis 0-100%) vs APR (y-axis). At 80% utilization, rate should be ~10%. At 100% utilization, rate should be ~50%. Adjust slope until satisfied.',
+      }),
+      makeTask("p7w3d5", 7, 31, 5, "Lottery: VRF Randomness with Switchboard", "Build an on-chain lottery using Switchboard VRF for provably fair randomness.", 4, "project", { url: "https://docs.switchboard.xyz/randomness", label: "Switchboard Randomness", platform: "docs" }, {
+        keyPoints: [
+          'VRF (Verifiable Random Function): randomness proven to be unbiased by on-chain verification',
+          'Switchboard VRF: request randomness, wait for VRF fulfillment callback',
+          'Lottery account: entry_price, max_tickets, tickets_sold, vrf_account, winner',
+          'Two-phase: sell phase (accept entries) → randomness fulfilled → distribute phase',
+          'Randomness seed = vrf_result[0..8] as u64 % tickets_sold → winner index',
+        ],
+        codeExample: `use switchboard_v2::VrfAccountData;
+
+#[account]
+pub struct Lottery {
+    pub authority: Pubkey,
+    pub vrf_account: Pubkey,    // Switchboard VRF account
+    pub entry_price: u64,
+    pub max_tickets: u32,
+    pub tickets_sold: u32,
+    pub treasury: u64,
+    pub winner: Option<Pubkey>,
+    pub draw_slot: u64,         // must be in the future
+    pub state: LotteryState,
+    pub bump: u8,
+}
+
+pub enum LotteryState { Open, DrawRequested, Complete }
+
+pub fn request_draw(ctx: Context<RequestDraw>) -> Result<()> {
+    let lottery = &mut ctx.accounts.lottery;
+    require!(matches!(lottery.state, LotteryState::Open), ErrorCode::WrongState);
+    require!(
+        Clock::get()?.slot >= lottery.draw_slot,
+        ErrorCode::TooEarlyToDraw
+    );
+    // Request randomness from Switchboard VRF
+    switchboard_v2::VrfRequestRandomness {
+        /* authority, vrf, oracle_queue, ... */
+    }.invoke(ctx.accounts.switchboard_program.clone(), /* ... */)?;
+    lottery.state = LotteryState::DrawRequested;
+    Ok(())
+}
+
+pub fn consume_randomness(ctx: Context<ConsumeRandomness>) -> Result<()> {
+    let vrf = VrfAccountData::new(&ctx.accounts.vrf_account)?;
+    let result = vrf.get_result()?;
+    let winner_index = u64::from_le_bytes(result.value[..8].try_into().unwrap())
+        % ctx.accounts.lottery.tickets_sold as u64;
+    ctx.accounts.lottery.winner = Some(ctx.accounts.tickets[winner_index as usize].buyer);
+    Ok(())
+}`,
+        commonMistakes: [
+          'Using slot hash as randomness — validators can manipulate slot hash within bounds to influence outcome',
+          'Selecting winner in the same transaction as randomness request — randomness must be fulfilled in a separate transaction',
+        ],
+        practicePrompt: 'Deploy lottery to devnet. Sell 10 tickets from 5 wallets. Request VRF draw. Wait for fulfillment. Verify winner was one of the 10 ticket holders. Transfer prize to winner.',
+      }),
+      makeTask("p7w3d6", 7, 31, 6, "Lottery: Ticket Purchase & Winner Selection", "Complete the lottery program with prize distribution and multiple rounds.", 4, "project", { url: "https://docs.switchboard.xyz/randomness", label: "Switchboard Randomness", platform: "docs" }, {
+        keyPoints: [
+          'TicketRecord PDA: buyer, lottery, ticket_number, bought_at',
+          'Multiple tickets per buyer: allow up to max_tickets_per_buyer per address',
+          'Prize distribution: winner gets 90%, 5% to protocol, 5% to next lottery seed',
+          'Round system: after winner selected, auto-initialize next lottery round',
+          'Unclaimed prizes: if winner does not claim within claim_window, prize rolls over',
+        ],
+        codeExample: `pub fn buy_ticket(ctx: Context<BuyTicket>) -> Result<()> {
+    let lottery = &mut ctx.accounts.lottery;
+    require!(matches!(lottery.state, LotteryState::Open), ErrorCode::LotteryClosed);
+    require!(lottery.tickets_sold < lottery.max_tickets, ErrorCode::SoldOut);
+
+    // Pay entry price
+    system_program::transfer(
+        CpiContext::new(ctx.accounts.system_program.to_account_info(), Transfer {
+            from: ctx.accounts.buyer.to_account_info(),
+            to: ctx.accounts.lottery.to_account_info(),
+        }),
+        lottery.entry_price,
+    )?;
+
+    // Record ticket
+    let ticket = &mut ctx.accounts.ticket_record;
+    ticket.buyer = ctx.accounts.buyer.key();
+    ticket.lottery = ctx.accounts.lottery.key();
+    ticket.ticket_number = lottery.tickets_sold;
+    lottery.tickets_sold += 1;
+    lottery.treasury += lottery.entry_price;
+    emit!(TicketPurchased {
+        buyer: ticket.buyer,
+        ticket_number: ticket.ticket_number,
+    });
+    Ok(())
+}`,
+        commonMistakes: [
+          'Storing all tickets in lottery account Vec — use individual TicketRecord PDAs for unbounded ticket counts',
+          'Not emitting TicketPurchased event — frontends cannot build a live ticket list without events',
+        ],
+        practicePrompt: 'Complete multi-round lottery: after winner claims, auto-start next round with new draw_slot. Deploy to devnet, run 2 full rounds, verify prize amounts in both.',
+      }),
+      makeTask("p7w3d7", 7, 31, 7, "Deploy All Three to Devnet", "Deploy Escrow, Lending, and Lottery to devnet with tests and GitHub READMEs.", 4, "project", { url: "https://solana.com/developers", label: "Solana Developers", platform: "docs" }, {
+        keyPoints: [
+          'Monorepo structure: one Anchor workspace with 3 programs',
+          'Anchor.toml: separate [programs.devnet] entries for each program',
+          'Shared types: common error codes and utility functions in a shared crate',
+          'CI: single GitHub Actions workflow running all three test suites',
+          'Portfolio page: list all 3 programs with devnet addresses and Explorer links',
+        ],
+        codeExample: `# Anchor.toml — multi-program workspace
+[programs.devnet]
+escrow = "EscrowProgramId..."
+lending = "LendingProgramId..."
+lottery = "LotteryProgramId..."
+
+[workspace]
+members = ["programs/escrow", "programs/lending", "programs/lottery"]
+
+# Cargo.toml workspace
+[workspace]
+members = ["programs/*"]
+resolver = "2"
+
+[workspace.dependencies]
+anchor-lang = { version = "0.30.1", features = ["init-if-needed"] }
+anchor-spl = "0.30.1"
+
+# Each program imports shared crate
+# programs/escrow/Cargo.toml:
+[dependencies]
+shared-utils = { path = "../../shared-utils" }`,
+        commonMistakes: [
+          'Three separate repos instead of one monorepo — cross-program dependencies become messy',
+          'No shared utility crate — duplicating error codes and math functions across programs',
+        ],
+        practicePrompt: 'Set up the monorepo. Deploy all 3 to devnet in one CI run. Add Solana Explorer badge links to each program in the root README. Share the GitHub link.',
+      }),
+    ],
+  },
+
+  // Week 32 — Projects 9-10
+  {
+    weekNumber: 32,
+    phaseWeek: 4,
+    phaseId: 7,
+    title: "Projects 9–10: Bridge & ZK+Solana",
+    goal: "Build your most ambitious Solana projects.",
+    isCompleted: false,
+    tasks: [
+      makeTask("p7w4d1", 7, 32, 1, "Bridge: Wormhole SDK Integration", "Integrate Wormhole cross-chain messaging to bridge tokens between Solana and EVM chains.", 4, "project", { url: "https://docs.wormhole.com/", label: "Wormhole Docs", platform: "docs" }, {
+        keyPoints: [
+          'Wormhole: decentralized cross-chain messaging protocol with 19 guardians',
+          'VAA (Verified Action Approval): signed message attesting to an event on source chain',
+          'Wormhole Token Bridge: lock-and-mint bridging for SPL tokens',
+          'testnet.wormholescan.io: explore VAAs and bridge transactions',
+          '@certusone/wormhole-sdk: TypeScript SDK for generating bridge transactions',
+        ],
+        codeExample: `import {
+    transferFromSolana,
+    redeemOnEth,
+    parseSequenceFromLogSolana,
+    getEmitterAddressSolana,
+} from "@certusone/wormhole-sdk";
+import { CONTRACTS } from "@certusone/wormhole-sdk";
+
+// Bridge SOL -> ETH: Lock tokens on Solana, mint wrapped on Ethereum
+async function bridgeToEthereum(amount: bigint, recipientEthAddress: string) {
+    // 1. Initiate transfer on Solana
+    const transferTx = await transferFromSolana(
+        connection,
+        CONTRACTS.TESTNET.solana.core,
+        CONTRACTS.TESTNET.solana.token_bridge,
+        wallet.publicKey,
+        tokenAccount,
+        tokenMint,
+        amount,
+        hexToUint8Array(recipientEthAddress),
+        CHAIN_ID_ETH,
+    );
+    const txId = await sendAndConfirm(transferTx);
+
+    // 2. Get Sequence from logs
+    const sequence = parseSequenceFromLogSolana(txReceipt);
+
+    // 3. Wait for guardian attestation (VAA)
+    const vaaUrl = \`https://api.testnet.wormholescan.io/api/v1/vaas/\${CHAIN_ID_SOLANA}/\${emitterAddress}/\${sequence}\`;
+    const vaaBytes = await fetchVAA(vaaUrl);
+
+    // 4. Redeem on Ethereum
+    await redeemOnEth(ETH_TOKEN_BRIDGE_ADDRESS, ethSigner, vaaBytes);
+}`,
+        commonMistakes: [
+          'Not waiting for guardian attestation (~15 seconds on testnet) before redeeming — VAA is not available instantly',
+          'Using mainnet contract addresses on testnet — always use CONTRACTS.TESTNET for development',
+        ],
+        practicePrompt: 'Bridge 0.01 devnet SOL-equivalent tokens from Solana testnet to Ethereum Goerli. Track the VAA on wormholescan. Verify wrapped tokens appear in MetaMask. Document the full flow.',
+      }),
+      makeTask("p7w4d2", 7, 32, 2, "Bridge: Lock-and-Mint Pattern", "Build the on-chain Solana program for the locking side of a custom bridge.", 4, "project", { url: "https://docs.wormhole.com/", label: "Wormhole Docs", platform: "docs" }, {
+        keyPoints: [
+          'Lock side (Solana): receive tokens from user, send Wormhole message with amount + destination',
+          'Mint side (EVM): receive Wormhole VAA, verify, mint wrapped tokens to recipient',
+          'BridgeVault PDA: holds locked tokens until redemption or reversal',
+          'Nonce: unique per transaction to prevent replay of the same lock',
+          'Finality: Solana requires 32 confirmations for Wormhole guardian attestation',
+        ],
+        codeExample: `// Custom bridge: lock tokens on Solana
+#[account]
+pub struct BridgeConfig {
+    pub authority: Pubkey,
+    pub vault: Pubkey,
+    pub wormhole_bridge: Pubkey,   // Wormhole core bridge program
+    pub wormhole_token_bridge: Pubkey,
+    pub target_chain: u16,         // Chain ID of destination (e.g. 2 = ETH)
+    pub target_contract: [u8; 32], // EVM contract address (32 bytes padded)
+    pub nonce: u32,
+    pub bump: u8,
+}
+
+pub fn lock_and_bridge(
+    ctx: Context<LockAndBridge>,
+    amount: u64,
+    recipient: [u8; 20], // EVM address
+) -> Result<()> {
+    // 1. Transfer tokens to vault
+    token::transfer(/* maker -> vault */, amount)?;
+
+    // 2. Publish Wormhole message
+    // Encode payload: (amount: u64 LE, recipient: [u8; 20])
+    let mut payload = Vec::with_capacity(28);
+    payload.extend_from_slice(&amount.to_le_bytes());
+    payload.extend_from_slice(&recipient);
+
+    wormhole_anchor_sdk::wormhole::post_message(
+        /* wormhole accounts */,
+        ctx.accounts.config.nonce,
+        payload,
+        wormhole_anchor_sdk::wormhole::Finality::Confirmed,
+    )?;
+    ctx.accounts.config.nonce += 1;
+    Ok(())
+}`,
+        commonMistakes: [
+          'Not incrementing nonce — each bridge message needs a unique nonce to prevent duplicate VAA verification',
+          'Using Finality::Processed instead of Confirmed — guardians require higher finality for security',
+        ],
+        practicePrompt: 'Build the Solana lock program. Test: user locks 100 tokens, assert vault balance = 100, assert Wormhole sequence emitted. Document the full bridge architecture.',
+      }),
+      makeTask("p7w4d3", 7, 32, 3, "Bridge: Cross-Chain Message Passing", "Implement bidirectional cross-chain messaging using Wormhole for arbitrary data.", 4, "project", { url: "https://docs.wormhole.com/", label: "Wormhole Docs", platform: "docs" }, {
+        keyPoints: [
+          'Wormhole can pass arbitrary bytes (not just tokens) — use for cross-chain governance, oracles, etc.',
+          'Message verification: parse VAA, check guardian signatures, check emitter chain/address',
+          'Replay protection: store processed VAA hashes in a ProcessedVAA PDA',
+          'Cross-chain DAO: vote on ETH, execute on Solana via Wormhole message',
+          'Wormhole relayers: automatic delivery of messages without user interaction',
+        ],
+        codeExample: `// Receive and verify Wormhole message on Solana
+pub fn receive_message(
+    ctx: Context<ReceiveMessage>,
+    vaa_hash: [u8; 32],
+) -> Result<()> {
+    let msg = ctx.accounts.posted.message().data();
+
+    // Replay protection
+    require!(
+        !ctx.accounts.processed_vaa.processed,
+        ErrorCode::AlreadyProcessed
+    );
+    ctx.accounts.processed_vaa.processed = true;
+    ctx.accounts.processed_vaa.vaa_hash = vaa_hash;
+
+    // Verify emitter is our trusted ETH contract
+    let emitter = ctx.accounts.posted.meta().emitter_address;
+    require!(
+        emitter == ctx.accounts.config.trusted_emitter,
+        ErrorCode::UntrustedEmitter
+    );
+
+    // Parse and execute the cross-chain instruction
+    let payload = parse_payload(msg)?;
+    match payload.action {
+        Action::UpdateFee { new_fee } => {
+            ctx.accounts.protocol_config.fee_bps = new_fee;
+        },
+        Action::PauseProtocol => {
+            ctx.accounts.protocol_config.paused = true;
+        },
+    }
+    Ok(())
+}`,
+        commonMistakes: [
+          'Not verifying the emitter address — any chain could send malicious messages if emitter is not checked',
+          'No replay protection — same VAA can be submitted multiple times executing the action repeatedly',
+        ],
+        practicePrompt: 'Build a cross-chain DAO: votes happen on Ethereum, execution happens on Solana. Deploy to testnets. Vote on Ethereum, relay VAA, execute on Solana. Document the full pipeline.',
+      }),
+      makeTask("p7w4d4", 7, 32, 4, "ZK+Solana: Groth16 Verifier on Solana", "Deploy a Groth16 verifier program on Solana and verify ZK proofs on-chain.", 4, "project", { url: "https://solana.com/developers", label: "Solana Developers", platform: "docs" }, {
+        keyPoints: [
+          'Solana has native precompiles for BN254 (Groth16) operations via syscalls',
+          'alt_bn128_pairing: native pairing check for Groth16 verification',
+          'Groth16 verify: e(A, B) == e(alpha, beta) * e(vk_x, gamma) * e(C, delta)',
+          'Public inputs must be committed to vk_x before verification',
+          'Circuit-specific VK is uploaded once; proof is verified per transaction',
+        ],
+        codeExample: `use solana_program::alt_bn128::prelude::*;
+
+pub fn verify_groth16_proof(
+    ctx: Context<VerifyProof>,
+    proof_a: [u8; 64],    // G1 point
+    proof_b: [u8; 128],   // G2 point
+    proof_c: [u8; 64],    // G1 point
+    public_inputs: Vec<[u8; 32]>,
+) -> Result<()> {
+    let vk = &ctx.accounts.verifying_key;
+
+    // Compute vk_x = vk_gamma_abc[0] + sum(pub_input[i] * vk_gamma_abc[i+1])
+    let mut vk_x = vk.gamma_abc[0];
+    for (i, input) in public_inputs.iter().enumerate() {
+        let mul_result = alt_bn128_multiplication(
+            &[vk.gamma_abc[i + 1].as_ref(), input.as_ref()].concat()
+        ).map_err(|_| error!(ErrorCode::BN128Error))?;
+        vk_x = alt_bn128_addition(&[vk_x.as_ref(), mul_result.as_ref()].concat())
+            .map_err(|_| error!(ErrorCode::BN128Error))?
+            .try_into().unwrap();
+    }
+
+    // Pairing check: e(A,B) * e(-alpha, beta) * e(-vk_x, gamma) * e(-C, delta) == 1
+    let pairing_input = build_pairing_input(&proof_a, &proof_b, &vk_x, vk, &proof_c);
+    let result = alt_bn128_pairing(&pairing_input)
+        .map_err(|_| error!(ErrorCode::PairingFailed))?;
+    require!(result[31] == 1, ErrorCode::InvalidProof);
+    Ok(())
+}`,
+        commonMistakes: [
+          'Using soft (non-native) BN254 implementation — 100x more expensive in CUs than the native syscalls',
+          'Not negating A or alpha in the pairing check — Groth16 verification requires specific negations in the equation',
+        ],
+        practicePrompt: 'Write a Circom circuit for "I know x such that x^2 = y (public)". Generate a Groth16 proof with snarkjs. Submit and verify the proof on your Solana devnet verifier program.',
+      }),
+      makeTask("p7w4d5", 7, 32, 5, "ZK+Solana: Private Transaction Circuit", "Build a Circom circuit for private transfers and verify it on Solana.", 4, "project", { url: "https://docs.circom.io/", label: "Circom Documentation", platform: "docs" }, {
+        keyPoints: [
+          'Private transfer: prove ownership of note commitment without revealing amount or recipient',
+          'Note = hash(amount, recipient, nonce) — commitment stored on-chain',
+          'Nullifier = hash(note, secret_key) — prevents double-spending',
+          'Circuit inputs: note (private), recipient (private), merkle_path (private), root (public), nullifier (public)',
+          'On-chain: store Merkle root of note commitments, set of spent nullifiers',
+        ],
+        codeExample: `pragma circom 2.0.0;
+include "circomlib/circuits/poseidon.circom";
+include "circomlib/circuits/mux1.circom";
+
+template PrivateTransfer(merkle_depth) {
+    // Public inputs
+    signal input root;          // current Merkle root of commitments
+    signal input nullifier_hash; // H(note || secret_key)
+    signal input new_commitment; // commitment for recipient
+
+    // Private inputs
+    signal input amount;
+    signal input secret_key;
+    signal input nonce;
+    signal input merkle_path[merkle_depth];
+    signal input merkle_indices[merkle_depth];
+
+    // 1. Reconstruct note commitment
+    component note_hash = Poseidon(3);
+    note_hash.inputs[0] <== amount;
+    note_hash.inputs[1] <== nonce;
+    note_hash.inputs[2] <== secret_key;
+
+    // 2. Verify Merkle inclusion
+    // (use MerkleProof template from Phase 9 example)
+
+    // 3. Verify nullifier
+    component null_hash = Poseidon(2);
+    null_hash.inputs[0] <== note_hash.out;
+    null_hash.inputs[1] <== secret_key;
+    nullifier_hash === null_hash.out;
+}`,
+        commonMistakes: [
+          'Not including nullifier in circuit — amount can be double-spent without nullifier tracking',
+          'Exposing recipient in public inputs — defeats the privacy of the transaction',
+        ],
+        practicePrompt: 'Complete the PrivateTransfer circuit. Compile with circom. Generate a proof. Submit and verify on your Solana verifier program from the previous task. Document the full flow.',
+      }),
+      makeTask("p7w4d6", 7, 32, 6, "ZK+Solana: Full Proof Pipeline", "Build the complete ZK+Solana pipeline: circuit → proof → on-chain verification → state update.", 4, "project", { url: "https://solana.com/developers", label: "Solana Developers", platform: "docs" }, {
+        keyPoints: [
+          'Full flow: user generates proof off-chain → submits proof + public inputs to Solana → program verifies → updates state',
+          'NullifierSet PDA: stores spent nullifiers, checked on every spend',
+          'CommitmentTree PDA: append-only Merkle tree of deposits',
+          'Deposit: hash(amount, recipient, nonce) → store commitment',
+          'Withdraw: submit proof → verify → mark nullifier spent → transfer tokens',
+        ],
+        codeExample: `// Full ZK private transfer program
+pub fn deposit(ctx: Context<Deposit>, commitment: [u8; 32], amount: u64) -> Result<()> {
+    // Accept tokens from user
+    token::transfer(/* user -> vault */, amount)?;
+    // Append commitment to Merkle tree
+    let tree = &mut ctx.accounts.commitment_tree;
+    tree.append(commitment)?;
+    emit!(DepositEvent { commitment, amount, index: tree.next_index - 1 });
+    Ok(())
+}
+
+pub fn withdraw(
+    ctx: Context<Withdraw>,
+    proof_a: [u8; 64],
+    proof_b: [u8; 128],
+    proof_c: [u8; 64],
+    root: [u8; 32],
+    nullifier_hash: [u8; 32],
+    recipient: Pubkey,
+    amount: u64,
+) -> Result<()> {
+    // Verify root exists in history (support old roots)
+    require!(ctx.accounts.commitment_tree.is_known_root(root), ErrorCode::UnknownRoot);
+    // Check nullifier not spent
+    require!(!ctx.accounts.nullifier_set.is_spent(nullifier_hash), ErrorCode::NoteAlreadySpent);
+    // Verify Groth16 proof
+    verify_proof(&proof_a, &proof_b, &proof_c, &[root, nullifier_hash, recipient.to_bytes()])?;
+    // Mark nullifier as spent
+    ctx.accounts.nullifier_set.mark_spent(nullifier_hash);
+    // Transfer tokens to recipient
+    Ok(())
+}`,
+        commonMistakes: [
+          'Only accepting the current Merkle root — deposits between transactions leave the root stale; store root history',
+          'Verifying root after marking nullifier spent — nullifier gets marked even if root check fails',
+        ],
+        practicePrompt: 'Complete the full pipeline. Deposit 100 tokens. Generate a withdrawal proof. Submit and verify on devnet. Assert recipient received 100 tokens and nullifier is marked spent.',
+      }),
+      makeTask("p7w4d7", 7, 32, 7, "Portfolio Polish: README, Deploy, Demo Video", "Polish all 10 projects and prepare your Solana portfolio for job applications.", 4, "project", { url: "https://solana.com/developers", label: "Solana Developers", platform: "docs" }, {
+        keyPoints: [
+          'Each project needs: star-worthy README, devnet deployment, working tests, CI badge',
+          'GitHub profile README: highlight the 10 projects with links and brief descriptions',
+          'Demo videos: 1-2 minutes per project showing the happy-path flow',
+          'Technical blog post: "I built 10 Solana programs in 4 months" — publish on Medium or dev.to',
+          'Portfolio stats: total programs deployed, total test coverage, total lines of Rust',
+        ],
+        codeExample: `# Phase 7 Portfolio Checklist
+
+## GitHub Profile README
+\`\`\`markdown
+## Solana Developer Portfolio
+
+| Project | Description | Devnet | Tests | CI |
+|---------|-------------|--------|-------|----|
+| Token Launch | SPL token with vesting + Merkle airdrop | [Explorer](link) | 15 tests | ✅ |
+| NFT Mint | Metaplex collection with royalties + reveal | [Explorer](link) | 12 tests | ✅ |
+| DEX | Constant product AMM with multi-hop routing | [Explorer](link) | 20 tests | ✅ |
+| Staking | Token staking with lock tiers + VeToken | [Explorer](link) | 18 tests | ✅ |
+| DAO | Token-weighted governance with timelock | [Explorer](link) | 22 tests | ✅ |
+| Escrow | P2P swap + streaming time-lock | [Explorer](link) | 14 tests | ✅ |
+| Lending | Collateral lending + liquidation engine | [Explorer](link) | 25 tests | ✅ |
+| Lottery | VRF-powered provably fair lottery | [Explorer](link) | 10 tests | ✅ |
+| Bridge | Wormhole cross-chain token bridge | [Explorer](link) | 8 tests | ✅ |
+| ZK Privacy | Circom circuit + on-chain Groth16 verifier | [Explorer](link) | 6 tests | ✅ |
+\`\`\``,
+        commonMistakes: [
+          'Skipping demo videos — reviewers spend < 2 minutes per project; a video is worth 1000 lines of README',
+          'Leaving broken tests in CI — a red CI badge is worse than no CI badge',
+        ],
+        practicePrompt: 'Complete the portfolio table in your GitHub profile README. Record demo videos for your 3 favorite projects. Write the blog post and publish it. Share all links in your portfolio document.',
+      }),
+    ],
+  },
 ]
 
 // ─── Phase 8: Price Oracle Blockchain (Weeks 33–36) ──────────────────────────
 const phase8Weeks: Week[] = [
-  makeSimpleWeek(33, 1, 8, "P2P Networking with libp2p", "Build the networking layer of your custom blockchain.",
-    ["libp2p: Node identity & keypairs", "Swarm & transport setup", "Peer discovery with Kademlia DHT", "Gossipsub for message broadcasting", "Request/response protocol", "Peer store & connection management", "P2P integration test: 3-node network"],
-    "docs", "https://libp2p.io/", "libp2p Documentation", "coding"),
-  makeSimpleWeek(34, 2, 8, "Block Structure & Transaction Model", "Design and implement the blockchain data structures.",
-    ["Block header: hash, prev_hash, timestamp", "Merkle tree implementation in Rust", "Transaction model: from/to/amount/sig", "ECDSA signing with k256 crate", "Block validation logic", "Chain state: HashMap<Hash, Block>", "Mempool: pending transaction queue"],
-    "github", "https://github.com/topics/blockchain-rust", "Blockchain Rust Examples", "coding"),
-  makeSimpleWeek(35, 3, 8, "Consensus: Proof of Authority", "Implement a simplified PoA consensus mechanism.",
-    ["Validator set: authorized block producers", "Round-robin block proposal", "Block signature threshold (2/3+1)", "Fork choice rule: heaviest chain", "Sync protocol: request missing blocks", "Slash conditions for misbehavior", "Consensus integration test"],
-    "docs", "https://tokio.rs/", "Tokio Async Runtime", "coding"),
-  makeSimpleWeek(36, 4, 8, "Price Oracle & REST API", "Add the price oracle functionality and external interface.",
-    ["Price feed aggregation logic", "Median price calculation", "Oracle submit_price instruction", "Aggregator smart contract logic", "REST API: GET /blocks, /txs, /price", "Block explorer HTML page", "End-to-end: 3 nodes + price oracle running"],
-    "docs", "https://docs.rs/axum/latest/axum/", "Axum Web Framework", "project"),
+  // Week 33 — P2P Networking
+  {
+    weekNumber: 33,
+    phaseWeek: 1,
+    phaseId: 8,
+    title: "P2P Networking with libp2p",
+    goal: "Build the networking layer of your custom blockchain.",
+    isCompleted: false,
+    tasks: [
+      makeTask("p8w1d1", 8, 33, 1, "libp2p: Node Identity & Keypairs", "Generate node identity keypairs, understand PeerIds, and set up the basic libp2p node structure.", 4, "coding", { url: "https://libp2p.io/", label: "libp2p Documentation", platform: "docs" }, {
+        keyPoints: [
+          'PeerId = hash of Ed25519 or secp256k1 public key — globally unique node identifier',
+          'Keypair is generated once and persisted to disk for node identity continuity',
+          'Multiaddr: libp2p address format — /ip4/127.0.0.1/tcp/8000/p2p/<PeerId>',
+          'Noise protocol: libp2p default encryption layer for all connections',
+          'yamux: multiplexing protocol allowing multiple streams over one TCP connection',
+        ],
+        codeExample: `use libp2p::{identity, PeerId};
+
+pub struct NodeIdentity {
+    pub keypair: identity::Keypair,
+    pub peer_id: PeerId,
+}
+
+impl NodeIdentity {
+    pub fn generate() -> Self {
+        let keypair = identity::Keypair::generate_ed25519();
+        let peer_id = PeerId::from(keypair.public());
+        Self { keypair, peer_id }
+    }
+
+    pub fn from_file(path: &str) -> anyhow::Result<Self> {
+        let bytes = std::fs::read(path)?;
+        let keypair = identity::Keypair::from_protobuf_encoding(&bytes)?;
+        let peer_id = PeerId::from(keypair.public());
+        Ok(Self { keypair, peer_id })
+    }
+
+    pub fn save_to_file(&self, path: &str) -> anyhow::Result<()> {
+        let bytes = self.keypair.to_protobuf_encoding()?;
+        std::fs::write(path, bytes)?;
+        Ok(())
+    }
+}
+
+pub fn build_transport(keypair: &identity::Keypair) -> libp2p::core::transport::Boxed<(PeerId, libp2p::core::muxing::StreamMuxerBox)> {
+    let noise_keys = libp2p::noise::Keypair::<libp2p::noise::X25519Spec>::new()
+        .into_authentic(keypair).unwrap();
+    libp2p::tcp::TokioTcpConfig::new()
+        .upgrade(libp2p::core::upgrade::Version::V1)
+        .authenticate(libp2p::noise::NoiseConfig::xx(noise_keys).into_authenticated())
+        .multiplex(libp2p::yamux::YamuxConfig::default())
+        .boxed()
+}`,
+        commonMistakes: [
+          'Generating a new keypair on every restart — node gets a new PeerId each time, peers cannot reconnect',
+          'Using TcpConfig instead of TokioTcpConfig — must use Tokio-specific transport when running on Tokio runtime',
+        ],
+        practicePrompt: 'Build a CLI that generates or loads a node identity from a file. Print the PeerId and local multiaddr. Verify determinism: same file = same PeerId across restarts.',
+      }),
+      makeTask("p8w1d2", 8, 33, 2, "Swarm & Transport Setup", "Initialize a libp2p Swarm with TCP transport and configure listening addresses.", 4, "coding", { url: "https://libp2p.io/", label: "libp2p Documentation", platform: "docs" }, {
+        keyPoints: [
+          'Swarm is the central coordinator: drives both the transport and the NetworkBehaviour',
+          'NetworkBehaviour trait: defines how the node reacts to network events',
+          'SwarmEvent: covers everything from new connections to protocol messages',
+          'listen_on: bind to a multiaddr to accept incoming connections',
+          'dial: initiate outgoing connection to another node multiaddr',
+        ],
+        codeExample: `use libp2p::{Swarm, swarm::{SwarmBuilder, SwarmEvent}};
+use tokio::select;
+
+pub async fn run_node(identity: NodeIdentity, listen_addr: libp2p::Multiaddr) -> anyhow::Result<()> {
+    let transport = build_transport(&identity.keypair);
+    let behaviour = OracleBehaviour::new(identity.peer_id);
+
+    let mut swarm = SwarmBuilder::with_tokio_executor(
+        transport,
+        behaviour,
+        identity.peer_id,
+    ).build();
+
+    swarm.listen_on(listen_addr)?;
+
+    loop {
+        select! {
+            event = swarm.select_next_some() => {
+                match event {
+                    SwarmEvent::NewListenAddr { address, .. } => {
+                        println!("Listening on: {address}");
+                    }
+                    SwarmEvent::ConnectionEstablished { peer_id, .. } => {
+                        println!("Connected to: {peer_id}");
+                    }
+                    SwarmEvent::ConnectionClosed { peer_id, cause, .. } => {
+                        eprintln!("Disconnected from {peer_id}: {cause:?}");
+                    }
+                    SwarmEvent::Behaviour(event) => {
+                        handle_behaviour_event(&mut swarm, event).await?;
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+}`,
+        commonMistakes: [
+          'Blocking in the Swarm event loop — the loop must be non-blocking; use async/await throughout',
+          'Not handling ConnectionClosed — nodes must detect peer loss and reconnect or remove from peer list',
+        ],
+        practicePrompt: 'Start two nodes on localhost:8000 and localhost:8001. Have node B dial node A. Verify both see ConnectionEstablished in their logs. Print connected peers every 5 seconds.',
+      }),
+      makeTask("p8w1d3", 8, 33, 3, "Peer Discovery with Kademlia DHT", "Set up Kademlia DHT for peer discovery without a centralized bootstrap list.", 4, "coding", { url: "https://libp2p.io/", label: "libp2p Documentation", platform: "docs" }, {
+        keyPoints: [
+          'Kademlia DHT: distributed peer discovery using XOR distance metric',
+          'Bootstrap: dial at least one known peer to join the DHT',
+          'Kademlia::bootstrap() triggers peer discovery from known peers',
+          'GET_CLOSEST_PEERS: find nodes closest to a target key in the DHT',
+          'Record storage: Kademlia can also store key-value records for peer routing',
+        ],
+        codeExample: `use libp2p::kad::{Kademlia, KademliaConfig, KademliaEvent, store::MemoryStore};
+use libp2p::{Multiaddr, PeerId};
+
+pub struct OracleBehaviour {
+    pub kademlia: Kademlia<MemoryStore>,
+}
+
+impl OracleBehaviour {
+    pub fn new(peer_id: PeerId) -> Self {
+        let store = MemoryStore::new(peer_id);
+        let kademlia = Kademlia::with_config(peer_id, store, KademliaConfig::default());
+        Self { kademlia }
+    }
+
+    pub fn add_bootstrap_peer(&mut self, peer_id: PeerId, addr: Multiaddr) {
+        self.kademlia.add_address(&peer_id, addr);
+    }
+
+    pub fn start_discovery(&mut self) {
+        self.kademlia.bootstrap().expect("bootstrap failed");
+    }
+}
+
+fn handle_kademlia_event(event: KademliaEvent) {
+    match event {
+        KademliaEvent::RoutingUpdated { peer, .. } => {
+            println!("Discovered peer: {peer}");
+        }
+        KademliaEvent::OutboundQueryProgressed { result, .. } => {
+            if let libp2p::kad::QueryResult::Bootstrap(Ok(_)) = result {
+                println!("Bootstrap complete");
+            }
+        }
+        _ => {}
+    }
+}`,
+        commonMistakes: [
+          'Not calling bootstrap() after adding addresses — addresses in routing table are not queried until triggered',
+          'Using a single bootstrap peer with no fallback — if that peer is offline, new nodes cannot join',
+        ],
+        practicePrompt: 'Start 5 nodes. Bootstrap from one known peer. After 5 seconds, assert each node has at least 3 others in its Kademlia routing table.',
+      }),
+      makeTask("p8w1d4", 8, 33, 4, "Gossipsub for Message Broadcasting", "Implement Gossipsub for broadcasting new blocks and transactions across the network.", 4, "coding", { url: "https://libp2p.io/", label: "libp2p Documentation", platform: "docs" }, {
+        keyPoints: [
+          'Gossipsub: epidemic broadcast protocol — each node forwards to a subset of peers',
+          'Topics: pub/sub channels (e.g., "new-blocks", "new-transactions", "oracle-prices")',
+          'Message deduplication: Gossipsub tracks seen message IDs to prevent floods',
+          'Mesh: each node maintains a mesh of 6-12 peers per topic for reliability',
+          'Scoring: slow or duplicate-sending peers get lower score and less mesh priority',
+        ],
+        codeExample: `use libp2p::gossipsub::{
+    Gossipsub, GossipsubConfigBuilder, GossipsubEvent,
+    IdentTopic, MessageAuthenticity, ValidationMode,
+};
+use std::time::Duration;
+
+pub fn build_gossipsub(keypair: &libp2p::identity::Keypair) -> Gossipsub {
+    let config = GossipsubConfigBuilder::default()
+        .heartbeat_interval(Duration::from_secs(1))
+        .validation_mode(ValidationMode::Strict)
+        .build()
+        .expect("config build failed");
+
+    let mut gs = Gossipsub::new(
+        MessageAuthenticity::Signed(keypair.clone()),
+        config,
+    ).expect("gossipsub create failed");
+
+    gs.subscribe(&IdentTopic::new("new-blocks")).unwrap();
+    gs.subscribe(&IdentTopic::new("oracle-prices")).unwrap();
+    gs
+}
+
+pub fn broadcast_block(gs: &mut Gossipsub, block: &Block) -> anyhow::Result<()> {
+    let data = bincode::serialize(block)?;
+    gs.publish(IdentTopic::new("new-blocks"), data)?;
+    Ok(())
+}`,
+        commonMistakes: [
+          'Not subscribing to topics before publishing — publishing to an unsubscribed topic has no effect',
+          'Using ContentTopic instead of IdentTopic when signing is required',
+        ],
+        practicePrompt: 'Start 5 nodes all subscribed to "oracle-prices". Broadcast a price update from node 1. Assert all 5 nodes receive it within 500ms.',
+      }),
+      makeTask("p8w1d5", 8, 33, 5, "Request/Response Protocol", "Implement a custom request/response protocol for block sync and peer queries.", 4, "coding", { url: "https://libp2p.io/", label: "libp2p Documentation", platform: "docs" }, {
+        keyPoints: [
+          'RequestResponse behaviour: typed RPC between two specific peers',
+          'Define Request and Response types: GetBlock(hash) returns BlockResponse',
+          'ResponseChannel: one-time channel for sending the response back to requester',
+          'Timeout: configure request_timeout (e.g. 10 seconds) for block sync',
+          'Multiple outstanding requests: RequestResponse tracks them by RequestId',
+        ],
+        codeExample: `use serde::{Serialize, Deserialize};
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum BlockRequest {
+    GetBlock { hash: [u8; 32] },
+    GetBlockRange { from: u64, to: u64 },
+    GetLatestBlock,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum BlockResponse {
+    Block(Option<Block>),
+    Blocks(Vec<Block>),
+    Error(String),
+}
+
+// Usage in behaviour handler:
+impl OracleBehaviour {
+    pub fn request_block(&mut self, peer: PeerId, hash: [u8; 32]) {
+        self.request_response.send_request(&peer, BlockRequest::GetBlock { hash });
+    }
+
+    pub fn handle_block_request(
+        &mut self,
+        channel: libp2p::request_response::ResponseChannel<BlockResponse>,
+        req: BlockRequest,
+    ) {
+        let response = match req {
+            BlockRequest::GetBlock { hash } => {
+                BlockResponse::Block(self.chain.blocks.get(&hash).cloned())
+            }
+            BlockRequest::GetLatestBlock => {
+                BlockResponse::Block(self.chain.blocks.get(&self.chain.head_hash).cloned())
+            }
+            BlockRequest::GetBlockRange { from, to } => {
+                let blocks = (from..=to)
+                    .filter_map(|h| self.chain.get_block_at_height(h).cloned())
+                    .collect();
+                BlockResponse::Blocks(blocks)
+            }
+        };
+        let _ = self.request_response.send_response(channel, response);
+    }
+}`,
+        commonMistakes: [
+          'Not responding to requests — the ResponseChannel drops after timeout causing requester to fail silently',
+          'Sending large block ranges in a single response — paginate large responses to avoid message size limits',
+        ],
+        practicePrompt: 'Implement GetBlockRange sync: new node starts empty, finds peers, requests blocks 0-100 in chunks of 10. Assert local chain has all 100 blocks after sync.',
+      }),
+      makeTask("p8w1d6", 8, 33, 6, "Peer Store & Connection Management", "Build a peer manager that tracks peer states, scores, and reconnects to lost validators.", 4, "coding", { url: "https://libp2p.io/", label: "libp2p Documentation", platform: "docs" }, {
+        keyPoints: [
+          'PeerStore: in-memory map of PeerId to PeerInfo (addresses, last_seen, score)',
+          'Validator set: known validators that must stay connected for consensus',
+          'Reconnect logic: if validator disconnects, attempt reconnect with exponential backoff',
+          'Max connections: cap total connections to avoid file descriptor exhaustion',
+          'Peer banning: block malicious peers by PeerId to prevent spam attacks',
+        ],
+        codeExample: `use std::collections::{HashMap, HashSet};
+use libp2p::{Multiaddr, PeerId};
+
+#[derive(Debug, Clone)]
+pub struct PeerInfo {
+    pub peer_id: PeerId,
+    pub addresses: Vec<Multiaddr>,
+    pub last_seen: std::time::Instant,
+    pub is_validator: bool,
+    pub score: i32,
+    pub reconnect_attempts: u32,
+}
+
+pub struct PeerManager {
+    peers: HashMap<PeerId, PeerInfo>,
+    validators: Vec<PeerId>,
+    banned: HashSet<PeerId>,
+    max_connections: usize,
+}
+
+impl PeerManager {
+    pub fn on_disconnect(&mut self, peer_id: &PeerId) {
+        if self.validators.contains(peer_id) {
+            let attempts = self.peers.get(peer_id)
+                .map(|p| p.reconnect_attempts).unwrap_or(0);
+            let delay_secs = 2u64.pow(attempts.min(6));
+            println!("Validator {peer_id} disconnected, retry in {delay_secs}s");
+        }
+    }
+
+    pub fn should_accept(&self, peer_id: &PeerId) -> bool {
+        !self.banned.contains(peer_id) && self.peers.len() < self.max_connections
+    }
+
+    pub fn update_score(&mut self, peer_id: &PeerId, delta: i32) {
+        if let Some(peer) = self.peers.get_mut(peer_id) {
+            peer.score = peer.score.saturating_add(delta);
+            if peer.score < -100 {
+                self.banned.insert(*peer_id);
+            }
+        }
+    }
+}`,
+        commonMistakes: [
+          'Not capping max_connections — each connection uses a file descriptor; default OS limit is 1024',
+          'Reconnecting immediately on disconnect — use exponential backoff to prevent storm reconnects',
+        ],
+        practicePrompt: 'Implement peer scoring: +10 for valid block, -50 for invalid block, ban at -100. Test: peer sends 3 invalid blocks, assert banned, reconnection refused.',
+      }),
+      makeTask("p8w1d7", 8, 33, 7, "P2P Integration Test: 3-Node Network", "Write an integration test spinning up 3 nodes, forming a network, and broadcasting a message.", 4, "coding", { url: "https://libp2p.io/", label: "libp2p Documentation", platform: "docs" }, {
+        keyPoints: [
+          'Use tokio::time::timeout to assert messages arrive within expected time bounds',
+          'tokio::spawn separate task per node — each runs its own event loop',
+          'Use mpsc channels to communicate between the test and node tasks',
+          'Port 0: use OS-assigned ports in tests to avoid conflicts',
+          'Test teardown: nodes must be stopped cleanly to avoid port conflicts in subsequent tests',
+        ],
+        codeExample: `#[tokio::test]
+async fn test_three_node_gossip() {
+    use tokio::{sync::mpsc, time::{timeout, Duration}};
+
+    let (tx1, mut rx1) = mpsc::channel::<u64>(100);
+    let (tx2, mut rx2) = mpsc::channel::<u64>(100);
+    let (tx3, mut rx3) = mpsc::channel::<u64>(100);
+
+    // Start 3 nodes on OS-assigned ports
+    let h1 = tokio::spawn(run_test_node(id1, tx1));
+    let h2 = tokio::spawn(run_test_node(id2, tx2));
+    let h3 = tokio::spawn(run_test_node(id3, tx3));
+
+    // Wait for nodes to start
+    tokio::time::sleep(Duration::from_millis(300)).await;
+
+    // Connect: node2 -> node1, node3 -> node2
+    node2_ctrl.dial(node1_addr.clone()).await;
+    node3_ctrl.dial(node2_addr.clone()).await;
+    tokio::time::sleep(Duration::from_millis(200)).await;
+
+    // Broadcast price from node1
+    node1_ctrl.broadcast_price(100u64).await;
+
+    // All nodes should receive within 1 second
+    let r2 = timeout(Duration::from_secs(1), rx2.recv()).await;
+    let r3 = timeout(Duration::from_secs(1), rx3.recv()).await;
+    assert_eq!(r2.unwrap().unwrap(), 100, "node2 wrong value");
+    assert_eq!(r3.unwrap().unwrap(), 100, "node3 wrong value");
+}`,
+        commonMistakes: [
+          'Using fixed ports in tests — parallel test runs cause "address already in use" errors',
+          'Not waiting for peers to connect before broadcasting — messages before mesh forms are dropped',
+        ],
+        practicePrompt: 'Write the 3-node integration test. Run it 5 times. Fix any timing flakiness. Run cargo test --test integration -- --nocapture to see logs.',
+      }),
+    ],
+  },
+
+  // Week 34 — Block Structure & Transactions
+  {
+    weekNumber: 34,
+    phaseWeek: 2,
+    phaseId: 8,
+    title: "Block Structure & Transaction Model",
+    goal: "Design and implement the blockchain data structures.",
+    isCompleted: false,
+    tasks: [
+      makeTask("p8w2d1", 8, 34, 1, "Block Header: Hash, Prev_hash, Timestamp", "Design and implement the Block data structure with cryptographic linking.", 4, "coding", { url: "https://github.com/topics/blockchain-rust", label: "Blockchain Rust Examples", platform: "github" }, {
+        keyPoints: [
+          'Block header: index, timestamp, prev_hash, merkle_root, validator, signature',
+          'Block hash = SHA-256 of the serialized header (not including the signature)',
+          'Genesis block: prev_hash = [0u8; 32], index = 0',
+          'Timestamp: Unix timestamp in milliseconds for sub-second resolution',
+          'Use bincode for binary serialization or serde_json for debugging',
+        ],
+        codeExample: `use sha2::{Sha256, Digest};
+use serde::{Serialize, Deserialize};
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BlockHeader {
+    pub index: u64,
+    pub timestamp: u64,
+    pub prev_hash: [u8; 32],
+    pub merkle_root: [u8; 32],
+    pub validator: [u8; 33],     // compressed secp256k1 pubkey
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Block {
+    pub header: BlockHeader,
+    pub transactions: Vec<Transaction>,
+    pub hash: [u8; 32],
+    pub signature: Vec<u8>,
+}
+
+impl Block {
+    pub fn compute_hash(header: &BlockHeader) -> [u8; 32] {
+        let serialized = bincode::serialize(header).expect("serialize failed");
+        let mut hasher = Sha256::new();
+        hasher.update(&serialized);
+        hasher.finalize().into()
+    }
+
+    pub fn genesis() -> Self {
+        let header = BlockHeader {
+            index: 0,
+            timestamp: 0,
+            prev_hash: [0u8; 32],
+            merkle_root: [0u8; 32],
+            validator: [0u8; 33],
+        };
+        let hash = Self::compute_hash(&header);
+        Block { header, transactions: vec![], hash, signature: vec![] }
+    }
+
+    pub fn validate_hash(&self) -> bool {
+        self.hash == Self::compute_hash(&self.header)
+    }
+}`,
+        commonMistakes: [
+          'Including the hash field in the hash computation — circular; hash only the header fields',
+          'Using SystemTime for timestamps in tests — flaky; mock the clock for deterministic tests',
+        ],
+        practicePrompt: 'Create genesis block and a create_next_block function. Write a test: create 10 blocks and verify chain linkage (each prev_hash matches previous hash).',
+      }),
+      makeTask("p8w2d2", 8, 34, 2, "Merkle Tree Implementation in Rust", "Implement a binary Merkle tree for transaction inclusion proofs.", 4, "coding", { url: "https://github.com/topics/blockchain-rust", label: "Blockchain Rust Examples", platform: "github" }, {
+        keyPoints: [
+          'Merkle root = SHA-256(left_child_hash || right_child_hash) recursively',
+          'Odd number of leaves: duplicate the last leaf to make even',
+          'Merkle proof: Vec of sibling hashes from leaf to root',
+          'verify_proof: recompute root from leaf and proof, compare to known root',
+          'Empty tree: root = [0u8; 32]',
+        ],
+        codeExample: `use sha2::{Sha256, Digest};
+
+pub struct MerkleTree {
+    pub leaves: Vec<[u8; 32]>,
+    pub root: [u8; 32],
+}
+
+impl MerkleTree {
+    pub fn new(leaves: Vec<[u8; 32]>) -> Self {
+        let root = Self::build_root(&leaves);
+        Self { leaves, root }
+    }
+
+    fn build_root(leaves: &[[u8; 32]]) -> [u8; 32] {
+        if leaves.is_empty() { return [0u8; 32]; }
+        if leaves.len() == 1 { return leaves[0]; }
+        let mut level: Vec<[u8; 32]> = leaves.to_vec();
+        while level.len() > 1 {
+            if level.len() % 2 != 0 {
+                level.push(*level.last().unwrap());
+            }
+            level = level.chunks(2)
+                .map(|pair| hash_pair(pair[0], pair[1]))
+                .collect();
+        }
+        level[0]
+    }
+
+    pub fn generate_proof(&self, index: usize) -> Vec<[u8; 32]> {
+        let mut proof = vec![];
+        let mut idx = index;
+        let mut level = self.leaves.clone();
+        while level.len() > 1 {
+            if level.len() % 2 != 0 { level.push(*level.last().unwrap()); }
+            let sibling = if idx % 2 == 0 { level[idx + 1] } else { level[idx - 1] };
+            proof.push(sibling);
+            idx /= 2;
+            level = level.chunks(2).map(|p| hash_pair(p[0], p[1])).collect();
+        }
+        proof
+    }
+}
+
+fn hash_pair(a: [u8; 32], b: [u8; 32]) -> [u8; 32] {
+    let mut hasher = Sha256::new();
+    hasher.update(a);
+    hasher.update(b);
+    hasher.finalize().into()
+}`,
+        commonMistakes: [
+          'Not duplicating the last leaf for odd-length arrays — produces incorrect root and invalid proofs',
+          'Wrong sibling ordering in proof verification — sibling direction must be stored (left/right)',
+        ],
+        practicePrompt: 'Create a Merkle tree with 8 transactions. Generate proof for tx[3]. Verify the proof. Tamper with tx[3] data and assert the proof is now invalid.',
+      }),
+      makeTask("p8w2d3", 8, 34, 3, "Transaction Model: From/To/Amount/Sig", "Design the transaction structure and implement serialization for the mempool.", 4, "coding", { url: "https://github.com/topics/blockchain-rust", label: "Blockchain Rust Examples", platform: "github" }, {
+        keyPoints: [
+          'Transaction fields: from (pubkey), to (pubkey), amount (u64), nonce (u64), fee, signature',
+          'Transaction hash = SHA-256(from || to || amount || nonce || fee) — deterministic',
+          'Nonce prevents replay: each account has a monotonically increasing nonce',
+          'Signature covers the hash — verifiable by anyone with the public key',
+          'Fee = amount * fee_rate — incentivizes validators to include transactions',
+        ],
+        codeExample: `use sha2::{Sha256, Digest};
+use serde::{Serialize, Deserialize};
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Transaction {
+    pub from: [u8; 33],
+    pub to: [u8; 33],
+    pub amount: u64,
+    pub nonce: u64,
+    pub fee: u64,
+    pub signature: Vec<u8>,
+}
+
+impl Transaction {
+    pub fn hash(&self) -> [u8; 32] {
+        let mut hasher = Sha256::new();
+        hasher.update(&self.from);
+        hasher.update(&self.to);
+        hasher.update(self.amount.to_le_bytes());
+        hasher.update(self.nonce.to_le_bytes());
+        hasher.update(self.fee.to_le_bytes());
+        hasher.finalize().into()
+    }
+
+    pub fn verify(&self) -> bool {
+        use k256::ecdsa::{VerifyingKey, Signature, signature::Verifier};
+        let vk = VerifyingKey::from_sec1_bytes(&self.from).ok();
+        let sig = Signature::from_bytes(self.signature.as_slice().into()).ok();
+        match (vk, sig) {
+            (Some(vk), Some(sig)) => vk.verify(&self.hash(), &sig).is_ok(),
+            _ => false,
+        }
+    }
+}`,
+        commonMistakes: [
+          'Not including nonce in the hash — enables replay attacks where the same tx can be submitted repeatedly',
+          'Verifying signature without nonce state check — old nonce tx passes sig verification but should be rejected',
+        ],
+        practicePrompt: 'Create 5 transactions from Alice to Bob with nonces 0-4. Verify all pass. Replay nonce 2 and assert the state machine rejects it.',
+      }),
+      makeTask("p8w2d4", 8, 34, 4, "ECDSA Signing with k256 Crate", "Implement account key generation, signing, and verification using secp256k1.", 4, "coding", { url: "https://github.com/topics/blockchain-rust", label: "Blockchain Rust Examples", platform: "github" }, {
+        keyPoints: [
+          'k256 crate: secp256k1 implementation (same curve as Bitcoin/Ethereum)',
+          'SigningKey: private key for signing; VerifyingKey: public key for verification',
+          'Address = hash of verifying_key (last 20 bytes of SHA256 of compressed pubkey)',
+          'Deterministic signing: k256 uses RFC6979 — same message gives same signature',
+          'Key persistence: store secret key bytes securely, never in plaintext in production',
+        ],
+        codeExample: `use k256::ecdsa::{SigningKey, VerifyingKey, Signature, signature::{Signer, Verifier}};
+use rand::rngs::OsRng;
+use sha2::{Sha256, Digest};
+
+pub struct Account {
+    pub signing_key: SigningKey,
+    pub address: [u8; 20],
+}
+
+impl Account {
+    pub fn generate() -> Self {
+        let signing_key = SigningKey::random(&mut OsRng);
+        let address = compute_address(signing_key.verifying_key());
+        Self { signing_key, address }
+    }
+
+    pub fn public_key_bytes(&self) -> [u8; 33] {
+        self.signing_key.verifying_key()
+            .to_sec1_bytes().as_ref().try_into().unwrap()
+    }
+
+    pub fn sign(&self, message: &[u8]) -> Vec<u8> {
+        let sig: Signature = self.signing_key.sign(message);
+        sig.to_bytes().to_vec()
+    }
+}
+
+fn compute_address(vk: &VerifyingKey) -> [u8; 20] {
+    let compressed = vk.to_sec1_bytes();
+    let hash = Sha256::digest(&compressed);
+    hash[12..].try_into().unwrap()
+}`,
+        commonMistakes: [
+          'Using rand::thread_rng() for key generation — must use OsRng for cryptographic key material',
+          'Storing private keys in plain text — always encrypt at rest in any non-demo environment',
+        ],
+        practicePrompt: 'Generate 3 accounts. Sign the same message with each. Verify all 3. Tamper with the message and assert all 3 verifications fail.',
+      }),
+      makeTask("p8w2d5", 8, 34, 5, "Block Validation Logic", "Implement the complete block validation function checking hash, signature, and transactions.", 4, "coding", { url: "https://github.com/topics/blockchain-rust", label: "Blockchain Rust Examples", platform: "github" }, {
+        keyPoints: [
+          'Validation order: header format, prev_hash linkage, hash correctness, validator signature, tx validation',
+          'Validator must be in the authorized validator set',
+          'All transactions must pass signature verification',
+          'No duplicate nonces within a block',
+          'Merkle root must match actual transaction hashes',
+        ],
+        codeExample: `#[derive(Debug)]
+pub enum ValidationError {
+    InvalidPrevHash,
+    InvalidHash,
+    InvalidValidatorSignature,
+    UnauthorizedValidator,
+    InvalidTransaction { index: usize, reason: String },
+    InvalidMerkleRoot,
+}
+
+pub fn validate_block(
+    block: &Block,
+    prev_block: &Block,
+    validator_set: &[[u8; 33]],
+) -> Result<(), ValidationError> {
+    if block.header.prev_hash != prev_block.hash {
+        return Err(ValidationError::InvalidPrevHash);
+    }
+    if block.hash != Block::compute_hash(&block.header) {
+        return Err(ValidationError::InvalidHash);
+    }
+    if !validator_set.contains(&block.header.validator) {
+        return Err(ValidationError::UnauthorizedValidator);
+    }
+    let sig_ok = verify_sig(&block.header.validator, &block.hash, &block.signature);
+    if !sig_ok { return Err(ValidationError::InvalidValidatorSignature); }
+
+    for (i, tx) in block.transactions.iter().enumerate() {
+        if !tx.verify() {
+            return Err(ValidationError::InvalidTransaction {
+                index: i, reason: "invalid signature".to_string()
+            });
+        }
+    }
+    let leaves: Vec<[u8; 32]> = block.transactions.iter().map(|tx| tx.hash()).collect();
+    let expected_root = MerkleTree::new(leaves).root;
+    if block.header.merkle_root != expected_root {
+        return Err(ValidationError::InvalidMerkleRoot);
+    }
+    Ok(())
+}`,
+        commonMistakes: [
+          'Skipping Merkle root validation — a validator could insert a fake transaction without changing the root',
+          'Not checking timestamp is within expected bounds — future-dated blocks confuse sync',
+        ],
+        practicePrompt: 'Write 5 validation tests: valid block passes; wrong prev_hash fails; wrong hash fails; unauthorized validator fails; invalid tx sig fails.',
+      }),
+      makeTask("p8w2d6", 8, 34, 6, "Chain State: HashMap<Hash, Block>", "Implement the chain state with fork tracking and longest chain selection.", 4, "coding", { url: "https://github.com/topics/blockchain-rust", label: "Blockchain Rust Examples", platform: "github" }, {
+        keyPoints: [
+          'Store blocks in HashMap<[u8;32], Block> keyed by block hash',
+          'Track head of chain: head_hash pointing to the latest block',
+          'Fork handling: multiple blocks at same height — pick highest cumulative score',
+          'get_ancestry: walk prev_hash to genesis to reconstruct block sequence',
+          'Finalization: blocks 32+ deep are considered final',
+        ],
+        codeExample: `use std::collections::HashMap;
+
+pub struct ChainState {
+    pub blocks: HashMap<[u8; 32], Block>,
+    pub head_hash: [u8; 32],
+    pub height: u64,
+}
+
+impl ChainState {
+    pub fn new(genesis: Block) -> Self {
+        let h = genesis.hash;
+        let mut blocks = HashMap::new();
+        blocks.insert(h, genesis);
+        Self { blocks, head_hash: h, height: 0 }
+    }
+
+    pub fn add_block(&mut self, block: Block) -> bool {
+        let hash = block.hash;
+        let idx = block.header.index;
+        self.blocks.insert(hash, block);
+        if idx > self.height {
+            self.head_hash = hash;
+            self.height = idx;
+            return true;
+        }
+        false
+    }
+
+    pub fn get_block_at_height(&self, height: u64) -> Option<&Block> {
+        let mut current = self.blocks.get(&self.head_hash)?;
+        while current.header.index > height {
+            current = self.blocks.get(&current.header.prev_hash)?;
+        }
+        if current.header.index == height { Some(current) } else { None }
+    }
+
+    pub fn is_finalized(&self, block_hash: &[u8; 32]) -> bool {
+        self.blocks.get(block_hash)
+            .map(|b| self.height.saturating_sub(b.header.index) >= 32)
+            .unwrap_or(false)
+    }
+}`,
+        commonMistakes: [
+          'Not pruning old forks from the HashMap — memory grows unboundedly on a live node',
+          'Assuming head always has highest index — forks at same height need score comparison',
+        ],
+        practicePrompt: 'Simulate a fork: A->B->C and A->B->D at same height. Add both. Assert head is the one produced by the majority-stake validator.',
+      }),
+      makeTask("p8w2d7", 8, 34, 7, "Mempool: Pending Transaction Queue", "Implement a transaction mempool with priority ordering and duplicate detection.", 4, "coding", { url: "https://github.com/topics/blockchain-rust", label: "Blockchain Rust Examples", platform: "github" }, {
+        keyPoints: [
+          'Mempool uses BTreeMap ordered by fee for inclusion priority',
+          'Reject duplicates: check tx_hash not already in mempool or recent blocks',
+          'Nonce ordering: per-account nonces must be sequential — reject nonce gaps',
+          'Mempool size limit: evict lowest-fee transactions when full',
+          'select_transactions: return top N transactions by fee for block building',
+        ],
+        codeExample: `use std::collections::{BTreeMap, HashMap, HashSet};
+use std::cmp::Reverse;
+
+pub struct Mempool {
+    priority_queue: BTreeMap<Reverse<u64>, [u8; 32]>,
+    transactions: HashMap<[u8; 32], Transaction>,
+    account_nonces: HashMap<[u8; 33], u64>,
+    seen_hashes: HashSet<[u8; 32]>,
+    max_size: usize,
+}
+
+impl Mempool {
+    pub fn add(&mut self, tx: Transaction) -> Result<(), String> {
+        let hash = tx.hash();
+        if self.seen_hashes.contains(&hash) { return Err("duplicate".into()); }
+        if !tx.verify() { return Err("bad signature".into()); }
+        let expected = *self.account_nonces.get(&tx.from).unwrap_or(&0);
+        if tx.nonce != expected {
+            return Err(format!("bad nonce: want {expected}, got {}", tx.nonce));
+        }
+        if self.transactions.len() >= self.max_size {
+            if let Some((&low_key, _)) = self.priority_queue.iter().next_back() {
+                if tx.fee <= low_key.0 { return Err("fee too low".into()); }
+                let low_hash = self.priority_queue.remove(&low_key).unwrap();
+                self.transactions.remove(&low_hash);
+            }
+        }
+        self.priority_queue.insert(Reverse(tx.fee), hash);
+        self.seen_hashes.insert(hash);
+        self.account_nonces.insert(tx.from, tx.nonce + 1);
+        self.transactions.insert(hash, tx);
+        Ok(())
+    }
+
+    pub fn select_transactions(&self, max: usize) -> Vec<Transaction> {
+        self.priority_queue.iter().take(max)
+            .filter_map(|(_, h)| self.transactions.get(h).cloned())
+            .collect()
+    }
+}`,
+        commonMistakes: [
+          'Not enforcing nonce ordering in mempool — out-of-order nonces confuse block validation',
+          'Never evicting stale transactions — mempool grows without bound over time',
+        ],
+        practicePrompt: 'Fill mempool with 1000 transactions (varying fees). Call select(100). Assert returned 100 have highest fees. Assert duplicates rejected. Assert nonce gap rejected.',
+      }),
+    ],
+  },
+
+  // Week 35 — PoA Consensus
+  {
+    weekNumber: 35,
+    phaseWeek: 3,
+    phaseId: 8,
+    title: "Consensus: Proof of Authority",
+    goal: "Implement a simplified PoA consensus mechanism.",
+    isCompleted: false,
+    tasks: [
+      makeTask("p8w3d1", 8, 35, 1, "Validator Set: Authorized Block Producers", "Design and implement the validator set management system.", 4, "coding", { url: "https://tokio.rs/", label: "Tokio Async Runtime", platform: "docs" }, {
+        keyPoints: [
+          'ValidatorSet: Vec of compressed pubkeys of authorized block producers',
+          'Validators configured at genesis and changed via governance',
+          'Each validator has a secp256k1 keypair for block signing',
+          'Validator index: deterministic ordering for round-robin assignment',
+          'Quorum = ceil(2n/3) + 1 signatures required for finality',
+        ],
+        codeExample: `#[derive(Debug, Clone)]
+pub struct ValidatorSet {
+    pub validators: Vec<[u8; 33]>,
+    pub quorum: usize,
+}
+
+impl ValidatorSet {
+    pub fn new(validators: Vec<[u8; 33]>) -> Self {
+        let n = validators.len();
+        let quorum = (2 * n / 3) + 1;
+        Self { validators, quorum }
+    }
+
+    pub fn get_proposer(&self, slot: u64) -> &[u8; 33] {
+        &self.validators[(slot as usize) % self.validators.len()]
+    }
+
+    pub fn is_validator(&self, pubkey: &[u8; 33]) -> bool {
+        self.validators.contains(pubkey)
+    }
+
+    pub fn verify_quorum(
+        &self,
+        signatures: &std::collections::HashMap<[u8; 33], Vec<u8>>,
+        msg: &[u8],
+    ) -> bool {
+        let valid = signatures.iter()
+            .filter(|(pk, sig)| self.is_validator(pk) && verify_sig(pk, msg, sig))
+            .count();
+        valid >= self.quorum
+    }
+}`,
+        commonMistakes: [
+          'Using pubkey bytes as HashMap key without consistent encoding — two nodes may serialize the same key differently',
+          'Not caching quorum count — recomputing it on every vote wastes CPU',
+        ],
+        practicePrompt: 'Implement ValidatorSet with 5 validators. Verify quorum: 3/5 signatures fail, 4/5 pass. Test proposer rotation over 10 slots: each of 5 validators proposes exactly twice.',
+      }),
+      makeTask("p8w3d2", 8, 35, 2, "Round-Robin Block Proposal", "Implement the leader rotation algorithm for PoA block production.", 4, "coding", { url: "https://tokio.rs/", label: "Tokio Async Runtime", platform: "docs" }, {
+        keyPoints: [
+          'Slot = wall clock time / slot_duration (e.g. 2 seconds per slot)',
+          'Proposer = validator_set[slot % validator_count]',
+          'Non-proposers wait for a block from the proposer then validate and vote',
+          'Timeout: if no block arrives within slot_duration/2, record a skip',
+          'Skip blocks: empty blocks to advance chain during proposer downtime',
+        ],
+        codeExample: `use std::time::{SystemTime, UNIX_EPOCH};
+use tokio::time::{sleep, Duration, interval};
+
+const SLOT_DURATION_MS: u64 = 2000;
+
+pub struct ConsensusEngine {
+    pub identity: Account,
+    pub validator_set: ValidatorSet,
+    pub chain: ChainState,
+    pub mempool: Mempool,
+}
+
+impl ConsensusEngine {
+    pub fn current_slot(&self) -> u64 {
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH).unwrap()
+            .as_millis() as u64;
+        now / SLOT_DURATION_MS
+    }
+
+    pub fn is_my_turn(&self) -> bool {
+        let slot = self.current_slot();
+        self.validator_set.get_proposer(slot) == &self.identity.public_key_bytes()
+    }
+
+    pub async fn run_loop(&mut self) {
+        let mut ticker = interval(Duration::from_millis(SLOT_DURATION_MS));
+        loop {
+            ticker.tick().await;
+            if self.is_my_turn() {
+                let block = self.propose_block();
+                self.broadcast_block(block).await;
+            } else {
+                let res = tokio::time::timeout(
+                    Duration::from_millis(SLOT_DURATION_MS / 2),
+                    self.receive_block(),
+                ).await;
+                match res {
+                    Ok(block) => self.process_block(block).await,
+                    Err(_) => println!("Slot {} skipped", self.current_slot()),
+                }
+            }
+        }
+    }
+}`,
+        commonMistakes: [
+          'Using local system time without NTP — nodes with clock drift propose at wrong slots',
+          'Proposing when behind on sync — should only propose if current block is within 1 slot of network tip',
+        ],
+        practicePrompt: 'Run 5 validator tasks. Each should propose once in every 5-slot cycle. Verify 10 blocks produced in ~20 seconds with correct validator rotation.',
+      }),
+      makeTask("p8w3d3", 8, 35, 3, "Block Signature Threshold (2/3+1)", "Implement vote collection and quorum verification for block finalization.", 4, "coding", { url: "https://tokio.rs/", label: "Tokio Async Runtime", platform: "docs" }, {
+        keyPoints: [
+          'After receiving proposed block: validate it, sign the block hash, broadcast vote',
+          'Vote = block_hash + validator_pubkey + signature',
+          'Collect votes from peers via Gossipsub "votes" topic',
+          'When quorum votes collected for same block_hash: finalize block',
+          'Conflicting votes (same validator, different blocks): slashable equivocation',
+        ],
+        codeExample: `use std::collections::HashMap;
+use serde::{Serialize, Deserialize};
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Vote {
+    pub block_hash: [u8; 32],
+    pub slot: u64,
+    pub validator: [u8; 33],
+    pub signature: Vec<u8>,
+}
+
+pub enum QuorumResult {
+    Finalized([u8; 32]),
+    Slash([u8; 33]),
+    Pending,
+}
+
+pub struct VoteCollector {
+    votes: HashMap<u64, HashMap<[u8; 32], Vec<Vote>>>,
+    validator_set: ValidatorSet,
+}
+
+impl VoteCollector {
+    pub fn add_vote(&mut self, vote: Vote) -> QuorumResult {
+        if !verify_sig(&vote.validator, &vote.block_hash, &vote.signature) {
+            return QuorumResult::Pending;
+        }
+        // Equivocation check
+        if let Some(slot_votes) = self.votes.get(&vote.slot) {
+            for (other_hash, others) in slot_votes {
+                if *other_hash != vote.block_hash
+                    && others.iter().any(|v| v.validator == vote.validator)
+                {
+                    return QuorumResult::Slash(vote.validator);
+                }
+            }
+        }
+        let block_votes = self.votes
+            .entry(vote.slot).or_default()
+            .entry(vote.block_hash).or_default();
+        block_votes.push(vote.clone());
+        if block_votes.len() >= self.validator_set.quorum {
+            return QuorumResult::Finalized(vote.block_hash);
+        }
+        QuorumResult::Pending
+    }
+}`,
+        commonMistakes: [
+          'Not checking equivocation — validators can vote for both forks unpunished',
+          'Accepting votes for old slots indefinitely — limit to current_slot +/- 2',
+        ],
+        practicePrompt: 'Test: 5 validators, quorum=4. Add 3 votes = Pending. Add 4th = Finalized. Test equivocation: same validator signs two different hashes at same slot = Slash.',
+      }),
+      makeTask("p8w3d4", 8, 35, 4, "Fork Choice Rule: Heaviest Chain", "Implement the fork choice algorithm to determine the canonical chain.", 4, "coding", { url: "https://tokio.rs/", label: "Tokio Async Runtime", platform: "docs" }, {
+        keyPoints: [
+          'Fork choice: when competing chains exist, pick the one with most validator weight',
+          'Weight = number of finalized blocks in each competing subtree',
+          'Longest chain is NOT always canonical — finalized blocks have priority',
+          'GHOST algorithm considers all blocks, not just chain length',
+          'Reorg: switch canonical chain when a competing chain becomes heavier',
+        ],
+        codeExample: `use std::collections::{HashMap, HashSet};
+
+pub struct ForkChoice {
+    pub chain_state: ChainState,
+    pub finalized_blocks: HashSet<[u8; 32]>,
+}
+
+impl ForkChoice {
+    pub fn get_head(&self) -> [u8; 32] {
+        let mut current = self.get_finalized_tip();
+        loop {
+            let children: Vec<[u8; 32]> = self.chain_state.blocks.values()
+                .filter(|b| b.header.prev_hash == current)
+                .map(|b| b.hash)
+                .collect();
+            if children.is_empty() { return current; }
+            current = *children.iter()
+                .max_by_key(|h| self.count_finalized_descendants(h))
+                .unwrap();
+        }
+    }
+
+    fn get_finalized_tip(&self) -> [u8; 32] {
+        self.finalized_blocks.iter()
+            .filter_map(|h| self.chain_state.blocks.get(h))
+            .max_by_key(|b| b.header.index)
+            .map(|b| b.hash)
+            .unwrap_or(self.chain_state.blocks.values()
+                .min_by_key(|b| b.header.index).unwrap().hash)
+    }
+
+    fn count_finalized_descendants(&self, start: &[u8; 32]) -> usize {
+        let mut count = if self.finalized_blocks.contains(start) { 1 } else { 0 };
+        let children: Vec<_> = self.chain_state.blocks.values()
+            .filter(|b| &b.header.prev_hash == start)
+            .map(|b| b.hash)
+            .collect();
+        for child in children {
+            count += self.count_finalized_descendants(&child);
+        }
+        count
+    }
+}`,
+        commonMistakes: [
+          'Using chain length instead of finalized count — attackers can mine long chains with no votes',
+          'Not handling deep reorgs — more than 32 blocks of reorg should be rejected as finality violation',
+        ],
+        practicePrompt: 'Create two forks: fork A (3 finalized) and fork B (5 finalized). Assert get_head() returns fork B. Add 3 more finalized to fork A. Assert fork choice switches back to A.',
+      }),
+      makeTask("p8w3d5", 8, 35, 5, "Sync Protocol: Request Missing Blocks", "Implement block synchronization for nodes that fall behind.", 4, "coding", { url: "https://tokio.rs/", label: "Tokio Async Runtime", platform: "docs" }, {
+        keyPoints: [
+          'On connection to peer: exchange latest block hash and height',
+          'If peer is ahead: request missing blocks in ranges via RequestResponse',
+          'Validate each received block before adding to chain',
+          'Sync modes: full sync (all blocks from genesis) vs fast sync (snapshot)',
+          'Log sync progress percentage to avoid appearing stuck',
+        ],
+        codeExample: `pub struct SyncManager {
+    pub chain: ChainState,
+    pub validator_set: ValidatorSet,
+}
+
+impl SyncManager {
+    pub async fn sync_with_peer(
+        &mut self,
+        peer_id: libp2p::PeerId,
+        peer_height: u64,
+        request_fn: impl Fn(u64, u64) -> Vec<Block>,
+    ) -> anyhow::Result<()> {
+        let local_height = self.chain.height;
+        if peer_height <= local_height { return Ok(()); }
+
+        let total = peer_height - local_height;
+        let mut from = local_height + 1;
+        while from <= peer_height {
+            let to = (from + 99).min(peer_height);
+            let blocks = request_fn(from, to);
+            for block in blocks {
+                if let Err(e) = validate_block(
+                    &block,
+                    self.chain.blocks.get(&block.header.prev_hash).unwrap(),
+                    &self.validator_set.validators,
+                ) {
+                    anyhow::bail!("Bad block from {peer_id}: {e:?}");
+                }
+                self.chain.add_block(block);
+            }
+            let done = (to - local_height) * 100 / total;
+            println!("Sync {done}%");
+            from = to + 1;
+        }
+        Ok(())
+    }
+}`,
+        commonMistakes: [
+          'Requesting one block at a time — extremely slow; always batch-request (100 blocks per round trip)',
+          'Not validating blocks during sync — accepting arbitrary data from peers without validation',
+        ],
+        practicePrompt: 'Start node A at height 0, node B at height 500. Connect. Assert A syncs all 500 blocks and reaches same head hash as B. Measure sync time.',
+      }),
+      makeTask("p8w3d6", 8, 35, 6, "Slash Conditions for Misbehavior", "Implement validator slashing for double signing and unavailability.", 4, "coding", { url: "https://tokio.rs/", label: "Tokio Async Runtime", platform: "docs" }, {
+        keyPoints: [
+          'Double signing (equivocation): validator signs two blocks at same height',
+          'Slash proof: submit both conflicting signatures to SlashingRegistry',
+          'Unavailability: validator misses too many assigned slots — remove from set',
+          'Slashing removes the validator from the active set',
+          'Slash bounty: reporter gets an incentive for submitting valid slash proofs',
+        ],
+        codeExample: `use std::collections::HashSet;
+
+#[derive(Debug, Clone)]
+pub struct SlashProof {
+    pub validator: [u8; 33],
+    pub slot: u64,
+    pub hash_1: [u8; 32],
+    pub sig_1: Vec<u8>,
+    pub hash_2: [u8; 32],
+    pub sig_2: Vec<u8>,
+    pub reporter: [u8; 33],
+}
+
+pub struct SlashingRegistry {
+    pub slashed: HashSet<[u8; 33]>,
+    pub proofs: Vec<SlashProof>,
+}
+
+impl SlashingRegistry {
+    pub fn submit_proof(&mut self, proof: SlashProof) -> Result<(), String> {
+        if !verify_sig(&proof.validator, &proof.hash_1, &proof.sig_1) {
+            return Err("bad sig 1".to_string());
+        }
+        if !verify_sig(&proof.validator, &proof.hash_2, &proof.sig_2) {
+            return Err("bad sig 2".to_string());
+        }
+        if proof.hash_1 == proof.hash_2 {
+            return Err("not a double sign".to_string());
+        }
+        if self.slashed.contains(&proof.validator) {
+            return Err("already slashed".to_string());
+        }
+        self.slashed.insert(proof.validator);
+        self.proofs.push(proof);
+        Ok(())
+    }
+}`,
+        commonMistakes: [
+          'No check for already-slashed validators — same slash can be reported multiple times',
+          'Slashing without dispute period — false proofs from malicious reporters need a challenge window',
+        ],
+        practicePrompt: 'Validator signs two blocks at height 5. Submit slash proof. Assert validator removed from ValidatorSet. Assert second slash attempt on same validator returns error.',
+      }),
+      makeTask("p8w3d7", 8, 35, 7, "Consensus Integration Test", "Test the complete PoA consensus with 5 nodes producing 20 blocks.", 4, "coding", { url: "https://tokio.rs/", label: "Tokio Async Runtime", platform: "docs" }, {
+        keyPoints: [
+          'Spin up 5 validator nodes using tokio::spawn with message channels',
+          'Assert blocks produced at 1 per slot (2 seconds)',
+          'Assert all 5 nodes converge to same chain head after 20 blocks',
+          'Byzantine fault: kill 1 node, assert chain continues with 3/5 quorum',
+          'Network partition: split into 2+3, assert 3-node side keeps producing',
+        ],
+        codeExample: `#[tokio::test(flavor = "multi_thread")]
+async fn test_poa_5_nodes() {
+    use tokio::time::{sleep, Duration};
+
+    let validators = generate_validator_set(5);
+    let nodes = start_test_nodes(&validators).await;
+
+    // Run consensus for ~20 blocks
+    sleep(Duration::from_secs(45)).await;
+
+    for node in &nodes {
+        let h = node.chain.height;
+        assert!(h >= 18 && h <= 22, "unexpected height {h}");
+    }
+    let head = nodes[0].chain.head_hash;
+    for node in &nodes {
+        assert_eq!(node.chain.head_hash, head, "chain disagreement");
+    }
+
+    // Kill validator 0
+    nodes[0].stop().await;
+    sleep(Duration::from_secs(15)).await;
+    // 4 remaining validators still meet quorum (4 >= 4)
+    assert!(nodes[1].chain.height > 20, "chain stopped after validator failure");
+}`,
+        commonMistakes: [
+          'Using wall clock sleep as termination condition — flaky on slow CI; use block count instead',
+          'Not asserting chain agreement across all nodes — test passes even if nodes diverge',
+        ],
+        practicePrompt: 'Run the consensus test. Add a Byzantine fault test: kill 2 of 5 (below quorum) and assert chain halts. Restart both and assert chain resumes.',
+      }),
+    ],
+  },
+
+  // Week 36 — Price Oracle & REST API
+  {
+    weekNumber: 36,
+    phaseWeek: 4,
+    phaseId: 8,
+    title: "Price Oracle & REST API",
+    goal: "Add the price oracle functionality and external interface.",
+    isCompleted: false,
+    tasks: [
+      makeTask("p8w4d1", 8, 36, 1, "Price Feed Aggregation Logic", "Collect price submissions from validators and aggregate them into a consensus price.", 4, "coding", { url: "https://docs.rs/axum/latest/axum/", label: "Axum Web Framework", platform: "docs" }, {
+        keyPoints: [
+          'Each validator submits price data fetched from external APIs (CoinGecko, Binance)',
+          'Price submission is a special transaction type in the mempool',
+          'Aggregation: collect prices from quorum of validators, compute median',
+          'Freshness: reject submissions older than 30 seconds',
+          'Price deviation: reject submissions more than 5% away from current consensus',
+        ],
+        codeExample: `use std::collections::HashMap;
+use serde::{Serialize, Deserialize};
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PriceSubmission {
+    pub asset: String,
+    pub price: u64,          // micro-USD (6 decimal places)
+    pub timestamp: u64,      // Unix ms when fetched
+    pub validator: [u8; 33],
+    pub signature: Vec<u8>,
+}
+
+pub struct PriceAggregator {
+    submissions: HashMap<String, Vec<PriceSubmission>>,
+    quorum: usize,
+    max_age_ms: u64,
+}
+
+impl PriceAggregator {
+    pub fn add_submission(&mut self, sub: PriceSubmission) -> Option<u64> {
+        let now = unix_ms_now();
+        if now.saturating_sub(sub.timestamp) > self.max_age_ms { return None; }
+        let hash = compute_submission_hash(&sub);
+        if !verify_sig(&sub.validator, &hash, &sub.signature) { return None; }
+
+        let subs = self.submissions.entry(sub.asset.clone()).or_default();
+        subs.retain(|s| now.saturating_sub(s.timestamp) < self.max_age_ms);
+        subs.push(sub);
+
+        if subs.len() >= self.quorum {
+            let mut prices: Vec<u64> = subs.iter().map(|s| s.price).collect();
+            prices.sort_unstable();
+            Some(prices[prices.len() / 2]) // median
+        } else {
+            None
+        }
+    }
+}`,
+        commonMistakes: [
+          'Using mean instead of median — one outlier submission skews mean significantly',
+          'Not removing stale submissions before aggregation — stale prices corrupt the feed',
+        ],
+        practicePrompt: 'Simulate 5 validators with prices [100, 101, 99, 200 (outlier), 102]. Assert median=101. Assert submissions older than 30s are removed before aggregation.',
+      }),
+      makeTask("p8w4d2", 8, 36, 2, "Median Price Calculation", "Implement robust median price with outlier detection and staleness handling.", 4, "coding", { url: "https://docs.rs/axum/latest/axum/", label: "Axum Web Framework", platform: "docs" }, {
+        keyPoints: [
+          'Median over 5+ validators resists a single Byzantine validator',
+          'IQR filter: remove submissions outside Q1-1.5*IQR .. Q3+1.5*IQR',
+          'TWAP on oracle prices smooths out momentary spikes',
+          'If fewer than quorum fresh submissions, return last known price with staleness flag',
+          'Confidence = number of validators agreeing within 1% of median',
+        ],
+        codeExample: `pub enum PriceResult {
+    Price { value: u64, confidence: usize },
+    Insufficient,
+    HighVariance,
+}
+
+pub fn compute_robust_price(mut prices: Vec<u64>) -> PriceResult {
+    let n = prices.len();
+    if n == 0 { return PriceResult::Insufficient; }
+
+    prices.sort_unstable();
+    if n < 3 { return PriceResult::Price { value: prices[n/2], confidence: n }; }
+
+    let q1 = prices[n / 4];
+    let q3 = prices[3 * n / 4];
+    let iqr = q3.saturating_sub(q1);
+    let lower = q1.saturating_sub(iqr * 3 / 2);
+    let upper = q3.saturating_add(iqr * 3 / 2);
+
+    let filtered: Vec<u64> = prices.iter()
+        .copied()
+        .filter(|&p| p >= lower && p <= upper)
+        .collect();
+
+    if filtered.len() < 2 { return PriceResult::HighVariance; }
+
+    let median = filtered[filtered.len() / 2];
+    let confidence = filtered.iter()
+        .filter(|&&p| {
+            let diff = if p > median { p - median } else { median - p };
+            diff * 100 / median < 1 // within 1%
+        })
+        .count();
+    PriceResult::Price { value: median, confidence }
+}`,
+        commonMistakes: [
+          'Using saturating_add for upper bound incorrectly — Q3 + 1.5*IQR can overflow u64 for large prices',
+          'Returning error when below quorum — callers need last known price even if slightly stale',
+        ],
+        practicePrompt: 'Test with [100, 99, 101, 500, 98]. Assert median=100, confidence>=3. Verify 500 is filtered by IQR. Test HighVariance with widely spread prices.',
+      }),
+      makeTask("p8w4d3", 8, 36, 3, "Oracle Submit Price Instruction", "Add a price submission transaction type to the blockchain.", 4, "coding", { url: "https://docs.rs/axum/latest/axum/", label: "Axum Web Framework", platform: "docs" }, {
+        keyPoints: [
+          'OracleTransaction extends Transaction with asset, price, timestamp',
+          'Only validator nodes can submit price transactions',
+          'Price transaction included in special oracle_txs field of Block',
+          'Oracle state account updated when block finalized with new consensus price',
+          'Price history: keep last 100 prices per asset for TWAP calculation',
+        ],
+        codeExample: `use std::collections::{HashMap, VecDeque};
+use serde::{Serialize, Deserialize};
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OracleTransaction {
+    pub base: Transaction,
+    pub asset: String,
+    pub price: u64,
+    pub source_timestamp: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct OracleState {
+    pub prices: HashMap<String, PricePoint>,
+    pub history: HashMap<String, VecDeque<PricePoint>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PricePoint {
+    pub price: u64,
+    pub timestamp: u64,
+    pub block_height: u64,
+    pub confidence: usize,
+}
+
+impl OracleState {
+    pub fn update(&mut self, asset: &str, price: u64, height: u64, confidence: usize) {
+        let pt = PricePoint { price, timestamp: unix_ms_now(), block_height: height, confidence };
+        self.prices.insert(asset.to_string(), pt.clone());
+        let hist = self.history.entry(asset.to_string()).or_default();
+        hist.push_back(pt);
+        if hist.len() > 100 { hist.pop_front(); }
+    }
+
+    pub fn get_twap(&self, asset: &str, window_blocks: u64) -> Option<u64> {
+        let pts = self.history.get(asset)?;
+        let tip = self.prices.get(asset)?.block_height;
+        let relevant: Vec<u64> = pts.iter()
+            .filter(|p| tip.saturating_sub(p.block_height) <= window_blocks)
+            .map(|p| p.price)
+            .collect();
+        if relevant.is_empty() { return None; }
+        Some(relevant.iter().sum::<u64>() / relevant.len() as u64)
+    }
+}`,
+        commonMistakes: [
+          'Allowing any sender to submit oracle prices — only validators should be oracle reporters',
+          'Storing unlimited price history — use VecDeque with a size cap',
+        ],
+        practicePrompt: 'Add oracle_txs to Block. In consensus, collect prices from quorum, compute median, store in OracleState. Query TWAP over last 10 blocks. Write unit test.',
+      }),
+      makeTask("p8w4d4", 8, 36, 4, "REST API: GET /blocks, /txs, /price", "Build an Axum REST API exposing blockchain data to external consumers.", 4, "coding", { url: "https://docs.rs/axum/latest/axum/", label: "Axum Web Framework", platform: "docs" }, {
+        keyPoints: [
+          'axum::Router with nested routes for clean API organization',
+          'Shared state: Arc<RwLock<ChainState>> passed as axum State extractor',
+          'JSON serialization: serde_json automatically via axum::Json',
+          'Pagination: GET /blocks?from=100&limit=20',
+          'CORS: tower_http::cors::CorsLayer for browser access',
+        ],
+        codeExample: `use axum::{Router, routing::get, extract::{State, Path, Query}, Json, http::StatusCode};
+use std::sync::{Arc, RwLock};
+use serde::{Deserialize, Serialize};
+
+pub type AppState = Arc<RwLock<OracleBlockchain>>;
+
+pub fn build_router(state: AppState) -> Router {
+    Router::new()
+        .route("/blocks/:hash", get(get_block))
+        .route("/blocks", get(get_blocks))
+        .route("/price/:asset", get(get_price))
+        .route("/status", get(get_status))
+        .layer(tower_http::cors::CorsLayer::permissive())
+        .with_state(state)
+}
+
+async fn get_price(
+    State(state): State<AppState>,
+    Path(asset): Path<String>,
+) -> Result<Json<PriceResponse>, StatusCode> {
+    let chain = state.read().map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    chain.oracle_state.prices.get(&asset)
+        .map(|p| Json(PriceResponse {
+            asset: asset.clone(),
+            price: p.price,
+            timestamp: p.timestamp,
+            confidence: p.confidence,
+        }))
+        .ok_or(StatusCode::NOT_FOUND)
+}
+
+#[derive(Serialize)]
+pub struct PriceResponse {
+    pub asset: String,
+    pub price: u64,
+    pub timestamp: u64,
+    pub confidence: usize,
+}`,
+        commonMistakes: [
+          'Holding the RwLock during async operations — drop the guard before any await point',
+          'Returning 200 with empty body for not-found — always return 404 for missing resources',
+        ],
+        practicePrompt: 'Build the Axum server. Test with curl: /price/SOL-USD, /blocks?from=0&limit=10, /status. Verify JSON responses have correct fields.',
+      }),
+      makeTask("p8w4d5", 8, 36, 5, "Block Explorer HTML Page", "Build a minimal HTML block explorer served by the Axum API.", 4, "project", { url: "https://docs.rs/axum/latest/axum/", label: "Axum Web Framework", platform: "docs" }, {
+        keyPoints: [
+          'Serve static HTML from Axum using axum::response::Html',
+          'JavaScript fetch: poll /blocks?limit=10 every 2 seconds for latest blocks',
+          'Use textContent (not innerHTML) for all DOM updates to avoid XSS',
+          'Display: block height, hash (truncated), timestamp, tx count, validator',
+          'Price widget: show current SOL/USD price with last update time',
+        ],
+        codeExample: `// Safe DOM manipulation using textContent only
+// This JavaScript snippet runs in the browser block explorer
+
+async function refreshBlocks() {
+    const blocks = await fetch('/blocks?limit=10').then(r => r.json());
+    const price  = await fetch('/price/SOL-USD').then(r => r.json());
+
+    // Safe price update
+    document.getElementById('price').textContent =
+        'SOL/USD: $' + (price.price / 1e6).toFixed(2);
+
+    // Safe table update using DOM APIs, not innerHTML
+    const tbody = document.getElementById('blocks-body');
+    while (tbody.firstChild) { tbody.removeChild(tbody.firstChild); }
+    for (const b of blocks) {
+        const tr = document.createElement('tr');
+        for (const text of [String(b.height), b.hash.slice(0,8)+'...', String(b.tx_count)]) {
+            const td = document.createElement('td');
+            td.textContent = text;   // textContent prevents XSS
+            tr.appendChild(td);
+        }
+        tbody.appendChild(tr);
+    }
+}
+
+setInterval(refreshBlocks, 2000);
+refreshBlocks();`,
+        commonMistakes: [
+          'Using innerHTML to render block data — block hashes or tx data could contain malicious HTML if not sanitized',
+          'Long-polling instead of setInterval — setInterval is fine for a block explorer',
+        ],
+        practicePrompt: 'Start a 3-node network. Open the block explorer in a browser. Verify new blocks appear every ~2 seconds. Verify price updates in real time. Screenshot the working explorer.',
+      }),
+      makeTask("p8w4d6", 8, 36, 6, "End-to-End: 3 Nodes + Price Oracle Running", "Run the complete system: 3 blockchain nodes with live price oracle and REST API.", 4, "project", { url: "https://docs.rs/axum/latest/axum/", label: "Axum Web Framework", platform: "docs" }, {
+        keyPoints: [
+          'docker-compose.yml: 3 validator containers + 1 observer node',
+          'Each validator fetches SOL/USD price from a public API every 10 seconds',
+          'Observer node: non-validating, syncs chain and serves REST API',
+          'Price consensus: every block includes oracle prices from all 3 validators',
+          'Log block height, price consensus, and peer count every 10 seconds',
+        ],
+        codeExample: `# docker-compose.yml for oracle blockchain
+services:
+  validator1:
+    build: .
+    command: ["oracle-chain", "validator", "--key", "/keys/v1.key", "--port", "8000"]
+    volumes: ["./keys:/keys:ro"]
+    ports: ["8000:8000"]
+    environment:
+      BOOTSTRAP_PEERS: "validator2:8000,validator3:8000"
+      PRICE_API: "https://api.binance.com/api/v3/ticker/price?symbol=SOLUSDT"
+  validator2:
+    build: .
+    command: ["oracle-chain", "validator", "--key", "/keys/v2.key", "--port", "8000"]
+    volumes: ["./keys:/keys:ro"]
+    ports: ["8001:8000"]
+    environment:
+      BOOTSTRAP_PEERS: "validator1:8000,validator3:8000"
+  validator3:
+    build: .
+    command: ["oracle-chain", "validator", "--key", "/keys/v3.key", "--port", "8000"]
+    volumes: ["./keys:/keys:ro"]
+    ports: ["8002:8000"]
+    environment:
+      BOOTSTRAP_PEERS: "validator1:8000,validator2:8000"
+  api:
+    build: .
+    command: ["oracle-chain", "observer", "--api-port", "3000"]
+    ports: ["3000:3000"]
+    environment:
+      BOOTSTRAP_PEERS: "validator1:8000"`,
+        commonMistakes: [
+          'Not persisting keys in Docker volumes — new keypair on restart breaks validator set membership',
+          'Using container-internal IPs as bootstrap peers — use docker-compose service names',
+        ],
+        practicePrompt: 'Run docker-compose up. After 2 minutes verify: all 3 validators connected; /price/SOL-USD returns live price; block explorer shows active chain.',
+      }),
+      makeTask("p8w4d7", 8, 36, 7, "Phase 8 Capstone: Full System Demo", "Record a demo and write documentation for your price oracle blockchain.", 4, "project", { url: "https://docs.rs/axum/latest/axum/", label: "Axum Web Framework", platform: "docs" }, {
+        keyPoints: [
+          'Architecture diagram: network topology, validators, P2P, API, block explorer',
+          'Performance metrics: blocks per second, P2P latency, price update frequency',
+          'GitHub README: overview, how to run locally, how to add a validator',
+          'Demo video: 5 minutes showing system start, block production, price updates, explorer',
+          'Phase 8 demonstrates deep systems programming — emphasize this in applications',
+        ],
+        codeExample: `// Phase 8 README outline
+
+// ## Oracle Blockchain
+// Custom Proof of Authority blockchain with decentralized price oracle
+
+// ### Key Features
+// - libp2p P2P networking with Kademlia discovery and Gossipsub broadcast
+// - Round-robin PoA consensus with 2/3+1 quorum finality
+// - Median price aggregation from validator submissions
+// - Axum REST API with live block explorer
+
+// ### Performance Benchmarks
+// - Block time: ~2 seconds
+// - Finality: ~6 seconds (3 blocks)
+// - P2P broadcast latency: <50ms on LAN
+// - Oracle price freshness: 10-second update cycle
+
+// ### Quick Start
+// git clone https://github.com/you/oracle-blockchain
+// docker-compose up
+// open http://localhost:3000
+// curl http://localhost:3000/price/SOL-USD`,
+        commonMistakes: [
+          'Not measuring performance — claims like "fast" need numbers to be credible',
+          'README without Quick Start section — reviewers who cannot run it in 5 minutes skip it',
+        ],
+        practicePrompt: 'Complete the README with performance benchmarks. Record the 5-minute demo video. Add GitHub Actions CI that builds the Docker image. Share the link as your Phase 8 deliverable.',
+      }),
+    ],
+  },
 ]
 
 // ─── Phase 9: ZK Learning & Building (Weeks 37–44) ────────────────────────────
