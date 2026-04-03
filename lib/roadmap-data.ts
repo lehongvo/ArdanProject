@@ -1100,8 +1100,104 @@ fn main() {
         ],
         practicePrompt: 'Write a generic Stack<T> with push, pop, peek, is_empty, len methods. Add a drain() method that returns all items as Vec<T>. Test with String, i32, and a custom struct.',
       }),
-      makeTask("p1w4d6", 1, 4, 6, "Testing in Rust", "#[test], #[cfg(test)], assert!/assert_eq!, integration tests, doctests. Test your grade tracker.", 4, "exercise", { url: "https://doc.rust-lang.org/book/ch11-00-testing.html", label: "Rust Book — Testing", platform: "docs" }),
-      makeTask("p1w4d7", 1, 4, 7, "Phase 1 Capstone: CLI Todo App", "Build a full CLI todo app with: add/remove/complete/list tasks, persist to JSON file, proper error handling, unit tests.", 4, "project", { url: "https://www.udemy.com/course/learn-to-code-with-rust/", label: "Learn to Code with Rust", platform: "udemy" }),
+      makeTask("p1w4d6", 1, 4, 6, "Testing in Rust", "#[test], #[cfg(test)], assert!/assert_eq!, integration tests, doctests. Test your grade tracker.", 4, "exercise", { url: "https://doc.rust-lang.org/book/ch11-00-testing.html", label: "Rust Book — Testing", platform: "docs" }, {
+        keyPoints: [
+          '#[test] marks a function as a unit test — cargo test runs them all',
+          '#[cfg(test)] module: test code only compiled during testing, not in production binary',
+          'assert_eq!(expected, actual) — panics with both values printed if they differ',
+          '#[should_panic] — marks a test that is expected to panic',
+          'Integration tests in tests/ directory — test the public API from an outside perspective',
+        ],
+        codeExample: `// src/lib.rs
+pub fn add(a: i32, b: i32) -> i32 { a + b }
+pub fn divide(a: f64, b: f64) -> Result<f64, String> {
+    if b == 0.0 { Err("division by zero".into()) }
+    else { Ok(a / b) }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_add() {
+        assert_eq!(add(2, 3), 5);
+        assert_eq!(add(-1, 1), 0);
+    }
+
+    #[test]
+    fn test_divide_ok() {
+        let result = divide(10.0, 2.0).unwrap();
+        assert!((result - 5.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_divide_by_zero() {
+        assert!(divide(5.0, 0.0).is_err());
+    }
+
+    #[test]
+    #[should_panic(expected = "index out of bounds")]
+    fn test_panic() {
+        let v = vec![1, 2, 3];
+        let _ = v[10]; // panics
+    }
+}`,
+        commonMistakes: [
+          'Using assert!(a == b) instead of assert_eq!(a, b) — the latter shows both values on failure',
+          'Testing private functions — prefer testing the public API through integration tests',
+        ],
+        practicePrompt: 'Write a full test suite for your word counter from Week 2: test count_words with empty string, single word, multiple words, punctuation, unicode. Aim for 100% branch coverage.',
+      }),
+      makeTask("p1w4d7", 1, 4, 7, "Phase 1 Capstone: CLI Todo App", "Build a full CLI todo app with: add/remove/complete/list tasks, persist to JSON file, proper error handling, unit tests.", 4, "project", { url: "https://www.udemy.com/course/learn-to-code-with-rust/", label: "Learn to Code with Rust", platform: "udemy" }, {
+        keyPoints: [
+          'serde + serde_json: serialize/deserialize Rust structs to/from JSON with #[derive(Serialize, Deserialize)]',
+          'clap crate: parse CLI arguments declaratively — subcommands, flags, required args',
+          'std::path::PathBuf: cross-platform file path handling',
+          'Bring together: structs, enums, Vec, HashMap, Result, iterators, traits from Phase 1',
+          'Project structure: main.rs orchestrates, lib.rs contains business logic, tests in mod tests',
+        ],
+        codeExample: `// Cargo.toml dependencies:
+// serde = { version = "1", features = ["derive"] }
+// serde_json = "1"
+// clap = { version = "4", features = ["derive"] }
+
+use serde::{Serialize, Deserialize};
+use clap::{Parser, Subcommand};
+
+#[derive(Serialize, Deserialize, Debug)]
+struct Todo {
+    id: u32,
+    title: String,
+    done: bool,
+}
+
+#[derive(Parser)]
+struct Cli {
+    #[command(subcommand)]
+    command: Commands,
+}
+
+#[derive(Subcommand)]
+enum Commands {
+    Add { title: String },
+    Complete { id: u32 },
+    Remove { id: u32 },
+    List,
+}
+
+fn load_todos(path: &str) -> Vec<Todo> {
+    std::fs::read_to_string(path)
+        .ok()
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or_default()
+}`,
+        commonMistakes: [
+          'Reading/writing JSON without serde_json::from_str handling errors — always use Result',
+          'Generating IDs with random — use max existing ID + 1 for simplicity in CLI apps',
+        ],
+        practicePrompt: 'Build the complete CLI todo app. Commands: add, complete, remove, list, clear. Persist to ~/.todos.json. Add a --filter done|pending flag to list command. Write 5+ unit tests.',
+      }),
     ],
   },
 ]
@@ -1116,13 +1212,339 @@ const phase2Weeks: Week[] = [
     goal: "Master advanced type-system features: generics, dynamic dispatch with trait objects, and lifetime annotations.",
     isCompleted: false,
     tasks: [
-      makeTask("p2w1d1", 2, 5, 1, "Advanced Generics & Monomorphization", "Generic functions/structs/enums, monomorphization cost, associated types vs type parameters. PhantomData.", 4, "video", { url: "https://www.udemy.com/course/rust-programming-master-class-from-beginner-to-expert/", label: "Rust Master Class — Generics", platform: "udemy" }),
-      makeTask("p2w1d2", 2, 5, 2, "Advanced Trait Patterns", "Trait bounds, where clauses, supertraits, blanket implementations, From/Into/AsRef/AsMut.", 4, "video", { url: "https://www.udemy.com/course/rust-programming-master-class-from-beginner-to-expert/", label: "Rust Master Class — Advanced Traits", platform: "udemy" }),
-      makeTask("p2w1d3", 2, 5, 3, "Trait Objects: dyn Trait", "Static vs dynamic dispatch, vtable, Box<dyn Trait>, dyn Trait in function signatures, object safety.", 4, "coding", { url: "https://doc.rust-lang.org/book/ch17-02-trait-objects.html", label: "Rust Book — Trait Objects", platform: "docs" }),
-      makeTask("p2w1d4", 2, 5, 4, "Lifetime Annotations", "What lifetimes mean, 'a syntax, lifetime in function signatures, structs with references, lifetime elision rules.", 4, "video", { url: "https://www.udemy.com/course/rust-programming-master-class-from-beginner-to-expert/", label: "Rust Master Class — Lifetimes", platform: "udemy" }),
-      makeTask("p2w1d5", 2, 5, 5, "Advanced Lifetime Scenarios", "Multiple lifetimes, lifetime bounds, 'static lifetime, lifetime with trait objects, NLL (Non-Lexical Lifetimes).", 4, "reading", { url: "https://doc.rust-lang.org/nomicon/lifetimes.html", label: "Rustonomicon — Lifetimes", platform: "docs" }),
-      makeTask("p2w1d6", 2, 5, 6, "Practice: Generic Data Structures", "Implement a generic Stack<T>, Queue<T>, and BinaryTree<T> from scratch.", 4, "exercise", { url: "https://exercism.org/tracks/rust", label: "Exercism — Data Structures", platform: "custom" }),
-      makeTask("p2w1d7", 2, 5, 7, "Project: Generic Event System", "Build a type-safe event emitter using generics + trait objects. Support multiple event types.", 4, "project", { url: "https://www.udemy.com/course/rust-programming-master-class-from-beginner-to-expert/", label: "Rust Master Class", platform: "udemy" }),
+      makeTask("p2w1d1", 2, 5, 1, "Advanced Generics & Monomorphization", "Generic functions/structs/enums, monomorphization cost, associated types vs type parameters. PhantomData.", 4, "video", { url: "https://www.udemy.com/course/rust-programming-master-class-from-beginner-to-expert/", label: "Rust Master Class — Generics", platform: "udemy" }, {
+        keyPoints: [
+          'Monomorphization: compiler generates a concrete copy of generic code for each type used — no runtime overhead but larger binary',
+          'Associated types (type Item = T) give each implementing type a single associated type — cleaner than extra type params',
+          'PhantomData<T>: zero-sized marker to tell the compiler a type logically owns or uses T',
+          'Multiple bounds: fn f<T: Clone + Debug + Send>() or with where clause',
+          'const generics: struct Array<T, const N: usize>([T; N]) — generic over values not just types',
+        ],
+        codeExample: `use std::marker::PhantomData;
+
+// Associated type example
+trait Container {
+    type Item;
+    fn get(&self, idx: usize) -> Option<&Self::Item>;
+    fn len(&self) -> usize;
+}
+
+struct Stack<T> {
+    data: Vec<T>,
+}
+
+impl<T> Container for Stack<T> {
+    type Item = T;
+    fn get(&self, idx: usize) -> Option<&T> { self.data.get(idx) }
+    fn len(&self) -> usize { self.data.len() }
+}
+
+// PhantomData for type-safe IDs
+struct UserId(u64, PhantomData<()>);
+struct PostId(u64, PhantomData<()>);
+
+// const generics (Rust 1.51+)
+struct FixedArray<T, const N: usize> {
+    data: [T; N],
+}
+
+impl<T: Default + Copy, const N: usize> FixedArray<T, N> {
+    fn new() -> Self {
+        Self { data: [T::default(); N] }
+    }
+}`,
+        commonMistakes: [
+          'Using type parameters when associated types are the right choice — Iterator uses associated type, not generic',
+          'Ignoring monomorphization cost — extremely generic code with many type instantiations bloats binary size',
+        ],
+        practicePrompt: 'Implement a type-safe typed_id crate: Id<T> struct where T is PhantomData marker. UserId, PostId cannot be compared with each other even though both wrap u64.',
+      }),
+      makeTask("p2w1d2", 2, 5, 2, "Advanced Trait Patterns", "Trait bounds, where clauses, supertraits, blanket implementations, From/Into/AsRef/AsMut.", 4, "video", { url: "https://www.udemy.com/course/rust-programming-master-class-from-beginner-to-expert/", label: "Rust Master Class — Advanced Traits", platform: "udemy" }, {
+        keyPoints: [
+          'Supertraits: trait Animal: Display requires types to also implement Display',
+          'Blanket implementations: impl<T: Display> MyTrait for T — implement for all Display types',
+          'From/Into: impl From<u32> for MyType automatically gives Into<MyType> for u32',
+          'AsRef<T>: accept both &String and &str by taking s: impl AsRef<str>',
+          'Newtype pattern with Deref: wrap a type to add behavior while delegating other methods',
+        ],
+        codeExample: `use std::fmt;
+
+// Supertrait
+trait Printable: fmt::Display + fmt::Debug {
+    fn print(&self) {
+        println!("Display: {self}  Debug: {self:?}");
+    }
+}
+
+// Blanket implementation — all Display+Debug types get Printable
+impl<T: fmt::Display + fmt::Debug> Printable for T {}
+
+// From/Into
+struct Celsius(f64);
+struct Fahrenheit(f64);
+
+impl From<Celsius> for Fahrenheit {
+    fn from(c: Celsius) -> Self {
+        Fahrenheit(c.0 * 9.0/5.0 + 32.0)
+    }
+}
+
+fn main() {
+    let c = Celsius(100.0);
+    let f: Fahrenheit = c.into();  // Into is auto-derived from From
+    println!("{:.1}°F", f.0);     // 212.0°F
+
+    // AsRef for flexible input
+    fn print_len(s: impl AsRef<str>) {
+        println!("{}", s.as_ref().len());
+    }
+    print_len("hello");              // &str works
+    print_len(String::from("hi"));   // String works
+}`,
+        commonMistakes: [
+          'Implementing both From<A> for B and From<B> for A — can create ambiguity; prefer one direction',
+          'Supertrait bounds not being satisfied — if Animal: Display, every impl Animal must also impl Display',
+        ],
+        practicePrompt: 'Create a metric unit system: Meters, Kilometers, Miles structs. Implement From conversions between all three. Write a generic fn distance<T: Into<Meters>>(d: T) -> String.',
+      }),
+      makeTask("p2w1d3", 2, 5, 3, "Trait Objects: dyn Trait", "Static vs dynamic dispatch, vtable, Box<dyn Trait>, dyn Trait in function signatures, object safety.", 4, "coding", { url: "https://doc.rust-lang.org/book/ch17-02-trait-objects.html", label: "Rust Book — Trait Objects", platform: "docs" }, {
+        keyPoints: [
+          'Static dispatch (impl Trait / generics): type resolved at compile time — zero cost, monomorphizes',
+          'Dynamic dispatch (dyn Trait): vtable at runtime — flexible but slight overhead (pointer indirection)',
+          'Object safety: a trait is object-safe if it can be used as dyn Trait — methods must not return Self or have generic parameters',
+          'Box<dyn Trait> stores a heap-allocated trait object — needed when size unknown at compile time',
+          '&dyn Trait is a fat pointer: data pointer + vtable pointer (16 bytes on 64-bit)',
+        ],
+        codeExample: `trait Shape {
+    fn area(&self) -> f64;
+    fn name(&self) -> &str;
+}
+
+struct Circle(f64);
+struct Square(f64);
+
+impl Shape for Circle {
+    fn area(&self) -> f64 { std::f64::consts::PI * self.0 * self.0 }
+    fn name(&self) -> &str { "circle" }
+}
+impl Shape for Square {
+    fn area(&self) -> f64 { self.0 * self.0 }
+    fn name(&self) -> &str { "square" }
+}
+
+// Static dispatch — monomorphizes at compile time
+fn print_area_static(shape: &impl Shape) {
+    println!("{}: {:.2}", shape.name(), shape.area());
+}
+
+// Dynamic dispatch — vtable at runtime
+fn total_area(shapes: &[Box<dyn Shape>]) -> f64 {
+    shapes.iter().map(|s| s.area()).sum()
+}
+
+fn main() {
+    let shapes: Vec<Box<dyn Shape>> = vec![
+        Box::new(Circle(5.0)),
+        Box::new(Square(3.0)),
+    ];
+    println!("Total area: {:.2}", total_area(&shapes));
+}`,
+        commonMistakes: [
+          'Making a non-object-safe trait into dyn Trait — Sized methods, Clone, or generic methods break object safety',
+          'Using dyn Trait everywhere for convenience — prefer impl Trait (static) when the concrete type is known',
+        ],
+        practicePrompt: 'Build a plugin system: trait Plugin with execute(&self, input: &str) -> String. Create three plugins (uppercase, reverse, word_count). Store them in Vec<Box<dyn Plugin>> and apply each to user input.',
+      }),
+      makeTask("p2w1d4", 2, 5, 4, "Lifetime Annotations", "What lifetimes mean, 'a syntax, lifetime in function signatures, structs with references, lifetime elision rules.", 4, "video", { url: "https://www.udemy.com/course/rust-programming-master-class-from-beginner-to-expert/", label: "Rust Master Class — Lifetimes", platform: "udemy" }, {
+        keyPoints: [
+          'Lifetimes don\'t change how long data lives — they describe relationships between reference durations',
+          '\'a is a lifetime parameter: fn f<\'a>(x: &\'a str, y: &\'a str) -> &\'a str means output lives as long as shorter of x or y',
+          'Lifetime elision: three rules that let you omit obvious annotations in common patterns',
+          'Struct with reference field needs lifetime annotation: struct Important<\'a> { excerpt: &\'a str }',
+          '\'static lifetime: data lives for entire program — string literals are &\'static str',
+        ],
+        codeExample: `// Without annotation — who does return live as long as?
+fn longest<'a>(x: &'a str, y: &'a str) -> &'a str {
+    if x.len() > y.len() { x } else { y }
+    // return lives as long as the shorter of x and y
+}
+
+// Struct holding a reference
+struct Excerpt<'a> {
+    text: &'a str,
+}
+
+impl<'a> Excerpt<'a> {
+    fn level(&self) -> i32 { 3 }  // elision: output doesn't borrow input
+
+    fn announce(&self, announcement: &str) -> &str {
+        println!("Announcement: {announcement}");
+        self.text  // elision: return borrows self, not announcement
+    }
+}
+
+fn main() {
+    let novel = String::from("Call me Ishmael. Some years ago...");
+    let first_sentence;
+    {
+        let i = novel.find('.').unwrap_or(novel.len());
+        first_sentence = &novel[..i];
+        let excerpt = Excerpt { text: first_sentence };
+        println!("{}", excerpt.announce("Important!"));
+    }
+    println!("sentence: {first_sentence}"); // still valid: novel alive
+}`,
+        commonMistakes: [
+          'Thinking lifetime annotations extend how long data lives — they only describe existing relationships',
+          'Adding \'a everywhere out of confusion — start with no annotations, add only where compiler requires',
+        ],
+        practicePrompt: 'Write a text highlighter: struct Highlighter<\'a> holding &\'a str source text. Add method find_word<\'b>(&self, word: &\'b str) -> Option<&\'a str> returning the matched portion.',
+      }),
+      makeTask("p2w1d5", 2, 5, 5, "Advanced Lifetime Scenarios", "Multiple lifetimes, lifetime bounds, 'static lifetime, lifetime with trait objects, NLL (Non-Lexical Lifetimes).", 4, "reading", { url: "https://doc.rust-lang.org/nomicon/lifetimes.html", label: "Rustonomicon — Lifetimes", platform: "docs" }, {
+        keyPoints: [
+          'NLL (Non-Lexical Lifetimes): borrows end when last used, not at end of block — fewer false errors',
+          '\'static in trait bounds: T: \'static means T contains no references shorter than \'static',
+          'Higher-Rank Trait Bounds (HRTB): for<\'a> Fn(&\'a str) — accepts any lifetime',
+          'Variance: covariant (&\'a T), contravariant (fn(T)), invariant (&\'a mut T)',
+          'Lifetime subtyping: \'a: \'b means \'a outlives \'b — \'a can be used where \'b is expected',
+        ],
+        codeExample: `// Multiple lifetime parameters
+fn get_shorter<'a, 'b: 'a>(x: &'a str, y: &'b str) -> &'a str {
+    // 'b: 'a means 'b outlives 'a
+    if x.len() <= y.len() { x } else { &y[..x.len()] }
+}
+
+// 'static bound — T must not borrow short-lived data
+fn spawn_task<T: Send + 'static>(task: T) {
+    std::thread::spawn(move || {
+        // T lives long enough for the thread
+    });
+}
+
+// HRTB — function that works with any lifetime
+fn apply<F>(f: F, x: &str) -> usize
+where
+    F: for<'a> Fn(&'a str) -> usize,
+{
+    f(x)
+}
+
+fn main() {
+    let len = apply(|s| s.len(), "hello world");
+    println!("{len}");
+}`,
+        commonMistakes: [
+          'Confusing T: \'static (T owns its data) with &\'static T (forever-live reference)',
+          'Trying to store short-lived references in thread::spawn closures — needs \'static',
+        ],
+        practicePrompt: 'Write a cache struct Cache<\'a, K, V> that stores &\'a K -> V pairs. Test that the cache cannot outlive the keys. Then refactor to Cache<K: Clone, V> using owned keys to remove the lifetime.',
+      }),
+      makeTask("p2w1d6", 2, 5, 6, "Practice: Generic Data Structures", "Implement a generic Stack<T>, Queue<T>, and BinaryTree<T> from scratch.", 4, "exercise", { url: "https://exercism.org/tracks/rust", label: "Exercism — Data Structures", platform: "custom" }, {
+        keyPoints: [
+          'A binary tree in Rust requires Box<Option<Node<T>>> or Box<Node<T>> for recursive types',
+          'Queue can be implemented with two Vecs (amortized O(1) dequeue)',
+          'Iterating over a tree requires either a stack-based traversal or a cursor approach',
+          'Generic constraints: impl<T: Ord> BinaryTree<T> — only allow comparable types',
+          'Test edge cases: empty structure, single element, duplicates, very deep trees',
+        ],
+        codeExample: `// Binary search tree — recursive with Box
+#[derive(Debug)]
+enum BST<T: Ord> {
+    Leaf,
+    Node {
+        value: T,
+        left: Box<BST<T>>,
+        right: Box<BST<T>>,
+    }
+}
+
+impl<T: Ord> BST<T> {
+    pub fn new() -> Self { BST::Leaf }
+
+    pub fn insert(self, val: T) -> Self {
+        match self {
+            BST::Leaf => BST::Node {
+                value: val,
+                left: Box::new(BST::Leaf),
+                right: Box::new(BST::Leaf),
+            },
+            BST::Node { value, left, right } => {
+                if val < value {
+                    BST::Node { value, left: Box::new(left.insert(val)), right }
+                } else if val > value {
+                    BST::Node { value, left, right: Box::new(right.insert(val)) }
+                } else {
+                    BST::Node { value, left, right } // duplicate: ignore
+                }
+            }
+        }
+    }
+
+    pub fn contains(&self, val: &T) -> bool {
+        match self {
+            BST::Leaf => false,
+            BST::Node { value, left, right } => {
+                if val == value { true }
+                else if val < value { left.contains(val) }
+                else { right.contains(val) }
+            }
+        }
+    }
+}`,
+        commonMistakes: [
+          'Recursive BST without Box — Rust cannot know the size of a recursive enum without indirection',
+          'Implementing insert(&mut self) instead of fn insert(self) -> Self — recursive ownership issues',
+        ],
+        practicePrompt: 'Implement in-order traversal that returns a Vec<&T> in sorted order. Then add a height() method. Test with 20 random insertions.',
+      }),
+      makeTask("p2w1d7", 2, 5, 7, "Project: Generic Event System", "Build a type-safe event emitter using generics + trait objects. Support multiple event types.", 4, "project", { url: "https://www.udemy.com/course/rust-programming-master-class-from-beginner-to-expert/", label: "Rust Master Class", platform: "udemy" }, {
+        keyPoints: [
+          'Event handlers stored as Box<dyn Fn(&Event)> — closure trait objects',
+          'Multiple event types with an enum or separate generic EventBus<T>',
+          'HashMap<EventType, Vec<Box<dyn Fn>>> for multi-type event registry',
+          'Fn vs FnMut vs FnOnce: choose based on whether handlers need mutable state',
+          'TypeId (std::any::TypeId) for dynamic type-based dispatch',
+        ],
+        codeExample: `use std::collections::HashMap;
+
+type Handler<T> = Box<dyn Fn(&T)>;
+
+struct EventBus<T> {
+    handlers: Vec<Handler<T>>,
+}
+
+impl<T> EventBus<T> {
+    pub fn new() -> Self {
+        Self { handlers: Vec::new() }
+    }
+
+    pub fn on(&mut self, handler: impl Fn(&T) + 'static) {
+        self.handlers.push(Box::new(handler));
+    }
+
+    pub fn emit(&self, event: &T) {
+        for handler in &self.handlers {
+            handler(event);
+        }
+    }
+}
+
+#[derive(Debug)]
+struct ClickEvent { x: f64, y: f64 }
+
+fn main() {
+    let mut bus: EventBus<ClickEvent> = EventBus::new();
+    bus.on(|e| println!("Handler 1: clicked at ({}, {})", e.x, e.y));
+    bus.on(|e| println!("Handler 2: distance from origin = {:.2}", (e.x*e.x + e.y*e.y).sqrt()));
+
+    bus.emit(&ClickEvent { x: 3.0, y: 4.0 });
+}`,
+        commonMistakes: [
+          'Handlers needing mutable state — use Fn + Mutex or FnMut in a RefCell for shared mutable state',
+          'Storing handlers without \'static bound — needed because handlers may be called later',
+        ],
+        practicePrompt: 'Extend the event bus to support once() — register a handler that fires exactly once then removes itself. Add emit_async() using Tokio.',
+      }),
     ],
   },
   {
@@ -1433,30 +1855,2571 @@ function makeSimpleWeek(
 
 // ─── Phase 6: Solana Smart Contracts (Weeks 21–28) ───────────────────────────
 const phase6Weeks: Week[] = [
-  makeSimpleWeek(21, 1, 6, "DeFi Primitives: AMM & Liquidity Pools", "Build an automated market maker with constant product formula (x*y=k).",
-    ["AMM Math: x*y=k formula", "Pool state account design", "Add liquidity instruction", "Remove liquidity instruction", "Swap instruction with price impact", "Fee collection & LP tokens", "Full AMM integration tests"],
-    "docs", "https://solana.com/developers", "Solana Developers", "coding"),
-  makeSimpleWeek(22, 2, 6, "AMM Advanced: Price Oracle & Flash Loans", "Add oracle price feeds and flash loan capability to the AMM.",
-    ["TWAP oracle implementation", "Price manipulation resistance", "Flash loan: borrow & repay in one tx", "Flash loan fee mechanism", "Arbitrage simulation", "Front-running protection", "AMM security audit checklist"],
-    "docs", "https://docs.switchboard.xyz/", "Switchboard Oracle Docs", "coding"),
-  makeSimpleWeek(23, 3, 6, "Lending Protocol: Core Logic", "Build a lending/borrowing protocol with interest rate model.",
-    ["Lending pool state design", "Deposit collateral instruction", "Borrow against collateral", "Interest rate model (linear/kinked)", "Liquidation condition logic", "Repay loan instruction", "Withdraw collateral instruction"],
-    "docs", "https://solana.com/developers", "Solana — DeFi Examples", "coding"),
-  makeSimpleWeek(24, 4, 6, "Lending Protocol: Safety & Liquidations", "Add liquidation engine, price-based safety checks, and protocol fees.",
-    ["Health factor calculation", "Liquidation bonus mechanics", "Oracle price integration", "Bad debt handling", "Protocol fee treasury", "Emergency pause mechanism", "Full lending protocol tests"],
-    "docs", "https://solana.com/developers", "Solana Developers", "coding"),
-  makeSimpleWeek(25, 5, 6, "NFT Programs: Mint & Metadata", "Build a custom NFT program with metadata, collection, and royalties.",
-    ["NFT mint program structure", "Metadata account with Metaplex", "On-chain royalty enforcement", "Collection verification", "Update authority controls", "Burn NFT instruction", "NFT marketplace listing"],
-    "custom", "https://developers.metaplex.com/", "Metaplex Developers", "coding"),
-  makeSimpleWeek(26, 6, 6, "NFT Marketplace: Listing & Trading", "Build NFT marketplace with listing, bidding, and royalty distribution.",
-    ["List NFT for sale (PDA escrow)", "Cancel listing", "Execute purchase (CPI to token)", "Auction: English auction logic", "Bid/cancel-bid instructions", "Royalty split on sale", "Marketplace fee collection"],
-    "custom", "https://developers.metaplex.com/", "Metaplex Docs", "coding"),
-  makeSimpleWeek(27, 7, 6, "Security Auditing: Vulnerability Patterns", "Learn common Solana smart contract vulnerabilities and how to prevent them.",
-    ["Owner checks & account validation", "Signer authorization patterns", "PDA seed manipulation attacks", "Integer overflow/underflow prevention", "Reentrancy in multi-instruction txs", "Anchor constraint audit checklist", "Full program audit walkthrough"],
-    "custom", "https://github.com/coral-xyz/anchor/blob/master/SECURITY.md", "Anchor Security", "reading"),
-  makeSimpleWeek(28, 8, 6, "Production Hardening & Phase 6 Capstone", "Harden your programs for production and build a full DeFi protocol.",
-    ["Upgrade authority best practices", "Multi-sig for admin actions", "Compute unit budget optimization", "Error handling & logging", "Devnet deployment & testing", "Mainnet readiness checklist", "Phase 6 Capstone: Full DeFi suite deploy"],
-    "docs", "https://solana.com/developers", "Solana Developers", "project"),
+  // Week 21 — AMM & Liquidity Pools
+  {
+    weekNumber: 21,
+    phaseWeek: 1,
+    phaseId: 6,
+    title: "DeFi Primitives: AMM & Liquidity Pools",
+    goal: "Build an automated market maker with constant product formula (x*y=k).",
+    isCompleted: false,
+    tasks: [
+      makeTask("p6w1d1", 6, 21, 1, "AMM Math: x*y=k Formula", "Derive the constant product invariant, understand price impact, slippage tolerance, and how reserves change after each swap.", 4, "reading", { url: "https://uniswap.org/whitepaper.pdf", label: "Uniswap v2 Whitepaper", platform: "custom" }, {
+        keyPoints: [
+          'The invariant k = x * y must hold after every swap (ignoring fees)',
+          'Price of token A in terms of B = reserve_B / reserve_A at any instant',
+          'Price impact grows non-linearly — a 10% pool swap moves price much more than 1%',
+          'Slippage = difference between expected price and actual execution price',
+          'LP tokens represent proportional ownership of reserves, not a fixed amount',
+        ],
+        codeExample: `// Constant product formula: x * y = k
+// Given: reserve_a, reserve_b, amount_in
+// Find: amount_out
+
+fn amount_out(reserve_in: u64, reserve_out: u64, amount_in: u64) -> u64 {
+    // numerator = reserve_out * amount_in
+    let numerator = (reserve_out as u128)
+        .checked_mul(amount_in as u128)
+        .expect("overflow");
+    // denominator = reserve_in + amount_in
+    let denominator = (reserve_in as u128)
+        .checked_add(amount_in as u128)
+        .expect("overflow");
+    (numerator / denominator) as u64
+}
+
+#[test]
+fn test_amm_math() {
+    // Pool: 1000 SOL, 50000 USDC  => price = 50 USDC/SOL
+    let out = amount_out(1000, 50000, 10); // swap 10 SOL
+    assert_eq!(out, 454); // slightly less than 500 due to price impact
+}`,
+        commonMistakes: [
+          'Using regular division (/) instead of integer arithmetic — always use checked_mul/checked_div to avoid silent overflow',
+          'Forgetting that k changes when fees are collected — fees increase k slightly over time',
+        ],
+        practicePrompt: 'Implement amount_out with a 0.3% fee (multiply amount_in by 997, denominator by 1000) and write a test asserting k after fee is >= k before.',
+      }),
+      makeTask("p6w1d2", 6, 21, 2, "Pool State Account Design", "Design the Anchor account struct for a liquidity pool: reserves, LP mint, bump, fees.", 4, "coding", { url: "https://www.anchor-lang.com/docs/account-types", label: "Anchor — Account Types", platform: "docs" }, {
+        keyPoints: [
+          'Pool PDA is derived from token_a_mint + token_b_mint — makes it deterministic and discoverable',
+          'LP mint is also a PDA so the program is the mint authority (no external key needed)',
+          'Store fee_numerator/fee_denominator instead of float for deterministic on-chain math',
+          'bump field saves recomputing the PDA bump on every instruction',
+          'token_a_vault and token_b_vault are token accounts owned by the pool PDA',
+        ],
+        codeExample: `use anchor_lang::prelude::*;
+
+#[account]
+pub struct Pool {
+    pub token_a_mint: Pubkey,
+    pub token_b_mint: Pubkey,
+    pub token_a_vault: Pubkey,    // token account holding reserve A
+    pub token_b_vault: Pubkey,    // token account holding reserve B
+    pub lp_mint: Pubkey,          // mint for LP tokens
+    pub token_a_reserve: u64,
+    pub token_b_reserve: u64,
+    pub lp_supply: u64,
+    pub fee_numerator: u64,       // e.g. 3
+    pub fee_denominator: u64,     // e.g. 1000  => 0.3%
+    pub bump: u8,
+    pub lp_mint_bump: u8,
+}
+
+impl Pool {
+    pub const LEN: usize = 8 + 32*5 + 8*5 + 1*2;
+}`,
+        commonMistakes: [
+          'Not storing the bump — forces recomputing find_program_address every call which wastes compute units',
+          'Using f64 for fee storage — floating point is non-deterministic across architectures; always use integer fractions',
+        ],
+        practicePrompt: 'Write an initialize_pool instruction that creates the Pool account and two vault accounts, assigning the PDA as vault authority.',
+      }),
+      makeTask("p6w1d3", 6, 21, 3, "Add Liquidity Instruction", "Implement add_liquidity: deposit proportional tokens, mint LP tokens using geometric mean for first deposit.", 4, "coding", { url: "https://solana.com/developers", label: "Solana Developers", platform: "docs" }, {
+        keyPoints: [
+          'First deposit sets the initial price — LP tokens = sqrt(a * b) using integer sqrt',
+          'Subsequent deposits must maintain current ratio: lp_out = lp_supply * min(a/ra, b/rb)',
+          'Use CPI to token program for transferring tokens and minting LP tokens',
+          'Return excess tokens if user provides more of one token than the ratio allows',
+          'Anchor constraint: token_a_vault.owner == pool.key() prevents spoofed vaults',
+        ],
+        codeExample: `pub fn add_liquidity(
+    ctx: Context<AddLiquidity>,
+    amount_a: u64,
+    amount_b: u64,
+    min_lp: u64,
+) -> Result<()> {
+    let pool = &mut ctx.accounts.pool;
+
+    let lp_to_mint = if pool.lp_supply == 0 {
+        // first deposit: geometric mean
+        integer_sqrt(
+            (amount_a as u128).checked_mul(amount_b as u128).unwrap()
+        ) as u64
+    } else {
+        // proportional mint: lp = supply * min(a/ra, b/rb)
+        let lp_a = (pool.lp_supply as u128)
+            .checked_mul(amount_a as u128).unwrap()
+            / pool.token_a_reserve as u128;
+        let lp_b = (pool.lp_supply as u128)
+            .checked_mul(amount_b as u128).unwrap()
+            / pool.token_b_reserve as u128;
+        lp_a.min(lp_b) as u64
+    };
+    require!(lp_to_mint >= min_lp, ErrorCode::SlippageTooHigh);
+    pool.token_a_reserve = pool.token_a_reserve.checked_add(amount_a).unwrap();
+    pool.token_b_reserve = pool.token_b_reserve.checked_add(amount_b).unwrap();
+    pool.lp_supply = pool.lp_supply.checked_add(lp_to_mint).unwrap();
+    Ok(())
+}`,
+        commonMistakes: [
+          'Not using geometric mean for the first LP mint — allows price manipulation attacks on the first deposit',
+          'Forgetting min_lp slippage protection — frontrunners can sandwich the add_liquidity transaction',
+        ],
+        practicePrompt: 'Implement integer_sqrt(n: u128) -> u128 using Babylonian method, then write a test: add 1000 SOL / 50000 USDC and assert lp_minted == sqrt(1000*50000).',
+      }),
+      makeTask("p6w1d4", 6, 21, 4, "Remove Liquidity Instruction", "Implement remove_liquidity: burn LP tokens proportionally, withdraw both tokens.", 4, "coding", { url: "https://solana.com/developers", label: "Solana Developers", platform: "docs" }, {
+        keyPoints: [
+          'withdraw_a = reserve_a * lp_burned / lp_supply (before burning)',
+          'withdraw_b = reserve_b * lp_burned / lp_supply (before burning)',
+          'Always compute amounts BEFORE updating lp_supply to avoid division by zero',
+          'Use min_a/min_b slippage guards just like add_liquidity',
+          'CPI: burn LP tokens via token program, then transfer vaulted tokens to user',
+        ],
+        codeExample: `pub fn remove_liquidity(
+    ctx: Context<RemoveLiquidity>,
+    lp_amount: u64,
+    min_a: u64,
+    min_b: u64,
+) -> Result<()> {
+    let pool = &mut ctx.accounts.pool;
+    require!(lp_amount <= pool.lp_supply, ErrorCode::InsufficientLiquidity);
+
+    // compute proportional withdrawals BEFORE modifying supply
+    let withdraw_a = (pool.token_a_reserve as u128)
+        .checked_mul(lp_amount as u128).unwrap()
+        / pool.lp_supply as u128;
+    let withdraw_b = (pool.token_b_reserve as u128)
+        .checked_mul(lp_amount as u128).unwrap()
+        / pool.lp_supply as u128;
+
+    let withdraw_a = withdraw_a as u64;
+    let withdraw_b = withdraw_b as u64;
+    require!(withdraw_a >= min_a, ErrorCode::SlippageTooHigh);
+    require!(withdraw_b >= min_b, ErrorCode::SlippageTooHigh);
+
+    pool.token_a_reserve -= withdraw_a;
+    pool.token_b_reserve -= withdraw_b;
+    pool.lp_supply -= lp_amount;
+    // ... CPI: burn lp_amount, transfer withdraw_a and withdraw_b to user
+    Ok(())
+}`,
+        commonMistakes: [
+          'Computing amounts after decrementing lp_supply — causes wrong proportions if lp_supply is updated first',
+          'Not verifying lp_amount <= pool.lp_supply — underflow panic in non-checked builds',
+        ],
+        practicePrompt: 'Write a test: add liquidity with 1000/50000, then remove 50% of LP tokens and assert each withdrawn amount is exactly 500/25000.',
+      }),
+      makeTask("p6w1d5", 6, 21, 5, "Swap Instruction with Price Impact", "Implement the core swap instruction with fee deduction and minimum output guard.", 4, "coding", { url: "https://solana.com/developers", label: "Solana Developers", platform: "docs" }, {
+        keyPoints: [
+          'Apply fee before computing amount_out: effective_in = amount_in * (denom - fee_num) / denom',
+          'Verify k after swap: new_a * new_b >= old_k (fees make k grow)',
+          'require!(amount_out >= min_amount_out) protects against frontrunning',
+          'Update both reserves atomically — partial updates leave the pool in invalid state',
+          'Emit a SwapEvent with amounts for indexers and frontends',
+        ],
+        codeExample: `pub fn swap(ctx: Context<Swap>, amount_in: u64, min_amount_out: u64) -> Result<()> {
+    let pool = &mut ctx.accounts.pool;
+    let k = (pool.token_a_reserve as u128)
+        .checked_mul(pool.token_b_reserve as u128)
+        .ok_or(ErrorCode::Overflow)?;
+
+    // deduct fee from input
+    let fee_num = pool.fee_numerator as u128;
+    let fee_den = pool.fee_denominator as u128;
+    let amount_in_with_fee = (amount_in as u128)
+        .checked_mul(fee_den - fee_num).unwrap()
+        / fee_den;
+
+    let new_reserve_in = (pool.token_a_reserve as u128)
+        .checked_add(amount_in_with_fee).unwrap();
+    let new_reserve_out = k / new_reserve_in;
+    let amount_out = (pool.token_b_reserve as u128)
+        .checked_sub(new_reserve_out)
+        .ok_or(ErrorCode::Underflow)? as u64;
+
+    require!(amount_out >= min_amount_out, ErrorCode::SlippageTooHigh);
+    pool.token_a_reserve = new_reserve_in as u64;
+    pool.token_b_reserve = new_reserve_out as u64;
+    emit!(SwapEvent { amount_in, amount_out });
+    Ok(())
+}`,
+        commonMistakes: [
+          'Applying the fee to amount_out instead of amount_in — gives wrong reserves and violates the invariant',
+          'Not checking min_amount_out — exposes users to unlimited slippage from sandwich attacks',
+        ],
+        practicePrompt: 'Fuzz the swap function: loop 10000 random swaps and assert pool.token_a_reserve * pool.token_b_reserve >= initial_k after every swap.',
+      }),
+      makeTask("p6w1d6", 6, 21, 6, "Fee Collection & LP Token Economics", "Understand how trading fees accrue to LP token holders and implement fee harvesting.", 4, "reading", { url: "https://uniswap.org/whitepaper.pdf", label: "Uniswap v2 Whitepaper", platform: "custom" }, {
+        keyPoints: [
+          'Fees stay in reserves — they increase k, making LP tokens worth more over time',
+          'No separate fee claim: fees are realized when LPs remove liquidity',
+          'Protocol fee can be an additional cut of the LP fee (Uniswap uses 1/6 of the 0.3%)',
+          'LP token price = (reserve_a + reserve_b in common units) / lp_supply',
+          'Impermanent loss occurs when token price ratio diverges from deposit ratio',
+        ],
+        codeExample: `// Fee accrual: fees stay in reserves, grow k
+// After 1000 swaps with 0.3% fee each:
+// k grows: new_k = k * (1 + fee * volume/reserve)^n
+
+// LP token value calculation (in terms of token_a):
+fn lp_token_price_in_a(pool: &Pool, price_b_in_a: f64) -> f64 {
+    let total_value_in_a = pool.token_a_reserve as f64
+        + pool.token_b_reserve as f64 * price_b_in_a;
+    total_value_in_a / pool.lp_supply as f64
+}
+
+// Impermanent loss formula:
+// IL = 2 * sqrt(price_ratio) / (1 + price_ratio) - 1
+fn impermanent_loss(price_ratio: f64) -> f64 {
+    2.0 * price_ratio.sqrt() / (1.0 + price_ratio) - 1.0
+}
+// price_ratio = current_price / entry_price
+// IL at 2x price change = 2*sqrt(2)/3 - 1 ≈ -5.72%`,
+        commonMistakes: [
+          'Thinking LP tokens always go up — impermanent loss can outweigh fee income in volatile markets',
+          'Trying to claim fees as a separate instruction — in constant product AMMs fees are implicit in reserve growth',
+        ],
+        practicePrompt: 'Write a simulation: 100 random swaps on a 1000/1000 pool with 0.3% fee. Print k before and after — verify it only grows, never shrinks.',
+      }),
+      makeTask("p6w1d7", 6, 21, 7, "Full AMM Integration Tests", "Write end-to-end Anchor tests covering initialize, add_liquidity, swap, remove_liquidity.", 4, "coding", { url: "https://www.anchor-lang.com/docs/testing/basics", label: "Anchor Testing Guide", platform: "docs" }, {
+        keyPoints: [
+          'anchor test spins up a local validator — use it for full integration tests',
+          'BN.js is required for u64 values in TypeScript test clients',
+          'Fetch account state after each instruction with program.account.pool.fetch(poolPda)',
+          'Test slippage failure: set min_amount_out too high and assert the tx is rejected',
+          'Use beforeEach to reset state — each test should start from a known pool state',
+        ],
+        codeExample: `import * as anchor from "@coral-xyz/anchor";
+import { BN } from "@coral-xyz/anchor";
+import { assert } from "chai";
+
+describe("AMM", () => {
+  const provider = anchor.AnchorProvider.env();
+  anchor.setProvider(provider);
+  const program = anchor.workspace.Amm;
+
+  it("initializes a pool and adds liquidity", async () => {
+    const [poolPda] = anchor.web3.PublicKey.findProgramAddressSync(
+      [Buffer.from("pool"), mintA.toBuffer(), mintB.toBuffer()],
+      program.programId
+    );
+    await program.methods
+      .addLiquidity(new BN(1000_000), new BN(50000_000), new BN(0))
+      .accounts({ pool: poolPda, /* ... */ })
+      .rpc();
+
+    const pool = await program.account.pool.fetch(poolPda);
+    assert.ok(pool.tokenAReserve.eq(new BN(1000_000)));
+    assert.ok(pool.tokenBReserve.eq(new BN(50000_000)));
+    assert.ok(pool.lpSupply.gtn(0));
+  });
+
+  it("rejects swap with insufficient output", async () => {
+    try {
+      await program.methods
+        .swap(new BN(100), new BN(999999)) // unrealistic min_out
+        .rpc();
+      assert.fail("should have thrown");
+    } catch (e) {
+      assert.include(e.message, "SlippageTooHigh");
+    }
+  });
+});`,
+        commonMistakes: [
+          'Using raw numbers instead of BN for u64 — JavaScript numbers lose precision above 2^53',
+          'Not awaiting confirmations — tests that check state immediately after rpc() can see stale data',
+        ],
+        practicePrompt: 'Write a test: add liquidity, perform 10 swaps back and forth, remove all liquidity, and assert both users have at least as many tokens as they started (fees made them richer).',
+      }),
+    ],
+  },
+
+  // Week 22 — AMM Advanced
+  {
+    weekNumber: 22,
+    phaseWeek: 2,
+    phaseId: 6,
+    title: "AMM Advanced: Price Oracle & Flash Loans",
+    goal: "Add oracle price feeds and flash loan capability to the AMM.",
+    isCompleted: false,
+    tasks: [
+      makeTask("p6w2d1", 6, 22, 1, "TWAP Oracle Implementation", "Implement a time-weighted average price oracle using cumulative price accumulators.", 4, "coding", { url: "https://docs.switchboard.xyz/", label: "Switchboard Oracle Docs", platform: "docs" }, {
+        keyPoints: [
+          'TWAP = (cumulative_price_end - cumulative_price_start) / elapsed_seconds',
+          'Accumulate price * elapsed_time on every swap — store last_cumulative_price and last_timestamp',
+          'TWAP is manipulation-resistant because averaging over time is expensive to manipulate',
+          'Use Clock::get()?.unix_timestamp for the on-chain timestamp',
+          'Store both price0_cumulative and price1_cumulative for both directions',
+        ],
+        codeExample: `use anchor_lang::prelude::*;
+
+#[account]
+pub struct Pool {
+    // ... existing fields
+    pub price_a_cumulative: u128,  // sum of (price_a * seconds)
+    pub price_b_cumulative: u128,
+    pub last_update_timestamp: i64,
+}
+
+pub fn update_twap(pool: &mut Pool) -> Result<()> {
+    let clock = Clock::get()?;
+    let now = clock.unix_timestamp;
+    let elapsed = (now - pool.last_update_timestamp) as u128;
+
+    if elapsed > 0 && pool.token_b_reserve > 0 && pool.token_a_reserve > 0 {
+        // price_a = reserve_b / reserve_a (scaled by 2^64 for precision)
+        let price_a = ((pool.token_b_reserve as u128) << 64)
+            / pool.token_a_reserve as u128;
+        pool.price_a_cumulative = pool.price_a_cumulative
+            .saturating_add(price_a.saturating_mul(elapsed));
+        pool.last_update_timestamp = now;
+    }
+    Ok(())
+}`,
+        commonMistakes: [
+          'Updating TWAP after changing reserves — must snapshot price BEFORE updating reserves in swap',
+          'Using u64 for cumulative price — will overflow within hours on active pools; use u128',
+        ],
+        practicePrompt: 'Extend your swap instruction to call update_twap before modifying reserves. Write a test that waits 2 seconds between swaps and asserts the TWAP moves toward the spot price.',
+      }),
+      makeTask("p6w2d2", 6, 22, 2, "Price Manipulation Resistance", "Understand and defend against oracle manipulation attacks using TWAP and circuit breakers.", 4, "reading", { url: "https://docs.switchboard.xyz/", label: "Switchboard Docs", platform: "docs" }, {
+        keyPoints: [
+          'Spot price oracles are trivially manipulable — one large swap, read price, undo',
+          'TWAP over >= 30 minutes is economically infeasible to manipulate on liquid pools',
+          'Circuit breakers: reject price updates if new_price > last_price * 1.05 (5% per slot)',
+          'Cross-validate: compare AMM TWAP against Switchboard/Pyth and reject large divergence',
+          'Chainlink, Pyth, and Switchboard are preferred for critical DeFi price feeds',
+        ],
+        codeExample: `// Circuit breaker: reject prices deviating > 5% per update
+pub fn validate_price_update(old_price: u64, new_price: u64) -> Result<()> {
+    let max_change = old_price / 20; // 5%
+    let diff = if new_price > old_price {
+        new_price - old_price
+    } else {
+        old_price - new_price
+    };
+    require!(diff <= max_change, ErrorCode::PriceManipulationDetected);
+    Ok(())
+}
+
+// Cross-validate AMM price with Pyth oracle
+pub fn cross_validate_price(
+    amm_price: u64,
+    pyth_price: u64,
+    tolerance_bps: u64, // e.g. 200 = 2%
+) -> Result<()> {
+    let diff = if amm_price > pyth_price {
+        amm_price - pyth_price
+    } else {
+        pyth_price - amm_price
+    };
+    let tolerance = pyth_price * tolerance_bps / 10000;
+    require!(diff <= tolerance, ErrorCode::PriceDivergenceTooHigh);
+    Ok(())
+}`,
+        commonMistakes: [
+          'Using spot price from AMM as oracle for lending decisions — enables flash loan attacks in the same transaction',
+          'Setting TWAP window too short (< 15 minutes) — profitable to manipulate during low-liquidity periods',
+        ],
+        practicePrompt: 'Write a test simulating a flash loan price manipulation: borrow, do a huge swap, read spot price (should be wrong), then verify TWAP is relatively unchanged.',
+      }),
+      makeTask("p6w2d3", 6, 22, 3, "Flash Loan: Borrow & Repay in One Tx", "Implement flash loans — uncollateralized loans that must be repaid within the same transaction.", 4, "coding", { url: "https://solana.com/developers", label: "Solana Developers", platform: "docs" }, {
+        keyPoints: [
+          'Flash loans rely on Solana\'s atomic transactions — all instructions succeed or all fail',
+          'Implementation: record balance before, transfer to borrower, invoke callback, verify balance after',
+          'No collateral needed because Solana reverts the entire transaction if repayment fails',
+          'Flash loan fee adds to reserves — it is a revenue source for LPs',
+          'Instruction introspection (load_instruction_at_checked) can verify the repay instruction exists',
+        ],
+        codeExample: `pub fn flash_borrow(ctx: Context<FlashBorrow>, amount: u64) -> Result<()> {
+    let pool = &mut ctx.accounts.pool;
+    // Record pre-borrow reserve
+    pool.flash_loan_amount = amount;
+    pool.pre_flash_reserve = pool.token_a_reserve;
+
+    // Transfer tokens to borrower (no collateral check)
+    let cpi_accounts = Transfer {
+        from: ctx.accounts.vault_a.to_account_info(),
+        to: ctx.accounts.borrower_token.to_account_info(),
+        authority: ctx.accounts.pool_authority.to_account_info(),
+    };
+    token::transfer(
+        CpiContext::new_with_signer(
+            ctx.accounts.token_program.to_account_info(),
+            cpi_accounts,
+            &[&[b"pool", pool.bump.to_le_bytes().as_ref()]],
+        ),
+        amount,
+    )?;
+    Ok(())
+}
+
+pub fn flash_repay(ctx: Context<FlashRepay>) -> Result<()> {
+    let pool = &mut ctx.accounts.pool;
+    let fee = pool.flash_loan_amount / 1000; // 0.1% fee
+    let required = pool.flash_loan_amount + fee;
+    require!(
+        ctx.accounts.vault_a.amount >= pool.pre_flash_reserve + fee,
+        ErrorCode::FlashLoanNotRepaid
+    );
+    pool.token_a_reserve = ctx.accounts.vault_a.amount;
+    Ok(())
+}`,
+        commonMistakes: [
+          'Not using instruction introspection — a borrower could call flash_borrow without flash_repay in the same tx',
+          'Forgetting to add the flash fee to reserves — the pool should profit from flash loans',
+        ],
+        practicePrompt: 'Write a test demonstrating a legitimate flash loan: borrow 1000 tokens, "arbitrage" (simulate with a mock), repay 1001 tokens, verify pool balance increased by 1.',
+      }),
+      makeTask("p6w2d4", 6, 22, 4, "Flash Loan Fee Mechanism", "Design and implement the flash loan fee structure and LP fee distribution.", 4, "coding", { url: "https://solana.com/developers", label: "Solana Developers", platform: "docs" }, {
+        keyPoints: [
+          'Aave charges 0.09%, dYdX charges 0% (revenue from spread) — 0.1% is a safe middle ground',
+          'Flash fees accrue to reserves just like swap fees — LP tokens become more valuable',
+          'Protocol can take a cut of flash fees by transferring to a treasury PDA',
+          'Store flash_fee_numerator separately from swap fee for independent tuning',
+          'Emit FlashLoanEvent with borrower, amount, fee for analytics',
+        ],
+        codeExample: `#[account]
+pub struct Pool {
+    // ... existing fields
+    pub flash_fee_numerator: u64,    // e.g. 1
+    pub flash_fee_denominator: u64,  // e.g. 1000 => 0.1%
+    pub protocol_fee_bps: u64,       // basis points of flash fee going to treasury
+    pub treasury: Pubkey,
+}
+
+fn compute_flash_fee(pool: &Pool, amount: u64) -> (u64, u64) {
+    let total_fee = amount
+        .checked_mul(pool.flash_fee_numerator).unwrap()
+        / pool.flash_fee_denominator;
+    let protocol_cut = total_fee
+        .checked_mul(pool.protocol_fee_bps).unwrap()
+        / 10000;
+    let lp_fee = total_fee - protocol_cut;
+    (lp_fee, protocol_cut)
+}
+
+#[event]
+pub struct FlashLoanEvent {
+    pub borrower: Pubkey,
+    pub amount: u64,
+    pub fee: u64,
+}`,
+        commonMistakes: [
+          'Integer rounding: total_fee = 1 for amounts < 1000 with 0.1% fee — add a minimum fee of 1 lamport',
+          'Not separating protocol fee from LP fee — LPs should not subsidize protocol treasury without consent',
+        ],
+        practicePrompt: 'Implement a governance-controlled fee update instruction that can change flash_fee_numerator, guarded by a multisig authority account.',
+      }),
+      makeTask("p6w2d5", 6, 22, 5, "Arbitrage Simulation", "Simulate cross-pool arbitrage using flash loans to understand MEV and pool equilibrium.", 4, "coding", { url: "https://solana.com/developers", label: "Solana Developers", platform: "docs" }, {
+        keyPoints: [
+          'Arbitrage maintains price parity across pools — if pool A has SOL@$50 and pool B has SOL@$52, arb is profitable',
+          'Flash loan arbitrage: borrow token A, swap on cheap pool, swap back on expensive pool, repay + profit',
+          'Profit = price_difference * volume - fees - gas',
+          'On Solana, arb bots compete in the same block — transaction ordering matters (MEV)',
+          'Jito bundles allow atomic multi-instruction arb with tip to block producer',
+        ],
+        codeExample: `// Arbitrage math: find optimal trade size between two pools
+// Pool1: ra1 * rb1 = k1, Pool2: ra2 * rb2 = k2
+// Optimal arb amount maximizes profit
+
+fn optimal_arb_amount(
+    reserve_a1: u64, reserve_b1: u64, // pool 1 reserves
+    reserve_a2: u64, reserve_b2: u64, // pool 2 reserves
+) -> u64 {
+    // price in pool1 = rb1/ra1, price in pool2 = rb2/ra2
+    // arb profitable when rb1/ra1 != rb2/ra2
+    let price1 = (reserve_b1 as f64) / (reserve_a1 as f64);
+    let price2 = (reserve_b2 as f64) / (reserve_a2 as f64);
+
+    if (price1 - price2).abs() < 0.001 { return 0; } // not worth it
+
+    // simplified: trade ~1% of smaller pool
+    let smaller_reserve = reserve_a1.min(reserve_a2);
+    smaller_reserve / 100
+}
+
+// After arb: both pools converge to geometric mean price
+// equilibrium_price = sqrt(price1 * price2)`,
+        commonMistakes: [
+          'Forgetting fees reduce arb profit significantly — a 0.3% fee each way means 0.6% price gap needed minimum',
+          'Using simulate instead of real flash loan in tests — simulate does not enforce atomic repayment',
+        ],
+        practicePrompt: 'Create two pool accounts with different prices (pool1: 1000/50000, pool2: 1000/52000). Write a function that computes the arb profit and optimal trade size.',
+      }),
+      makeTask("p6w2d6", 6, 22, 6, "Front-Running Protection", "Implement commit-reveal and deadline mechanisms to protect users from MEV bots.", 4, "coding", { url: "https://solana.com/developers", label: "Solana Developers", platform: "docs" }, {
+        keyPoints: [
+          'Front-running: bot sees pending swap, submits higher-fee tx, executes before victim',
+          'Slippage tolerance (min_amount_out) is the primary defense — bots cannot make you get less than your minimum',
+          'Deadline parameter: require!(Clock::get()?.unix_timestamp <= deadline) prevents stale replays',
+          'Private mempools (Jito) reduce frontrunning by bundling user + arb into same block',
+          'Commit-reveal: hash(amount + nonce) first, then reveal — prevents sniping',
+        ],
+        codeExample: `// Deadline guard on swap
+pub fn swap_with_deadline(
+    ctx: Context<Swap>,
+    amount_in: u64,
+    min_amount_out: u64,
+    deadline: i64,
+) -> Result<()> {
+    let clock = Clock::get()?;
+    require!(
+        clock.unix_timestamp <= deadline,
+        ErrorCode::TransactionExpired
+    );
+    // proceed with swap...
+    swap_internal(&mut ctx.accounts.pool, amount_in, min_amount_out)
+}
+
+// Commit-reveal swap (2 transactions)
+pub fn commit_swap(ctx: Context<CommitSwap>, commitment: [u8; 32]) -> Result<()> {
+    let slot = Clock::get()?.slot;
+    ctx.accounts.commitment_record.hash = commitment;
+    ctx.accounts.commitment_record.slot = slot;
+    ctx.accounts.commitment_record.user = ctx.accounts.user.key();
+    Ok(())
+}
+
+pub fn reveal_swap(
+    ctx: Context<RevealSwap>,
+    amount_in: u64,
+    nonce: u64,
+    min_out: u64,
+) -> Result<()> {
+    let rec = &ctx.accounts.commitment_record;
+    let expected = anchor_lang::solana_program::hash::hashv(&[
+        &amount_in.to_le_bytes(), &nonce.to_le_bytes(),
+    ]);
+    require!(rec.hash == expected.to_bytes(), ErrorCode::InvalidCommitment);
+    Ok(())
+}`,
+        commonMistakes: [
+          'Setting deadline too far in the future (> 30 seconds) — still allows frontrunning in the window',
+          'Not combining deadline with min_amount_out — deadline alone does not protect against price manipulation',
+        ],
+        practicePrompt: 'Add a deadline: i64 parameter to your swap instruction and write a test that simulates time advancing past the deadline and asserts TransactionExpired error.',
+      }),
+      makeTask("p6w2d7", 6, 22, 7, "AMM Security Audit Checklist", "Run through a structured security audit of your complete AMM program.", 4, "exercise", { url: "https://github.com/coral-xyz/sealevel-attacks", label: "Sealevel Attacks Reference", platform: "github" }, {
+        keyPoints: [
+          'Audit tool: cargo audit checks dependencies for known vulnerabilities',
+          'Check every account: is owner == expected_program? is signer when required?',
+          'Overflow: every arithmetic op must use checked_, saturating_, or wrapping_',
+          'PDA bumps must be stored and verified — never accept arbitrary bump from user',
+          'CPI: validate the target program address before invoking (no arbitrary CPI)',
+        ],
+        codeExample: `// Security audit checklist as Anchor constraints
+
+#[derive(Accounts)]
+pub struct Swap<'info> {
+    #[account(
+        mut,
+        seeds = [b"pool", pool.token_a_mint.as_ref(), pool.token_b_mint.as_ref()],
+        bump = pool.bump,                    // ✓ verified PDA bump
+        constraint = !pool.paused @ ErrorCode::PoolPaused  // ✓ circuit breaker
+    )]
+    pub pool: Account<'info, Pool>,
+
+    #[account(
+        mut,
+        constraint = vault_a.owner == pool.key() @ ErrorCode::InvalidVaultOwner,  // ✓ owner check
+        constraint = vault_a.mint == pool.token_a_mint @ ErrorCode::WrongMint,    // ✓ mint check
+    )]
+    pub vault_a: Account<'info, TokenAccount>,
+
+    #[account(
+        mut,
+        constraint = user_token_a.owner == user.key() @ ErrorCode::InvalidUserAccount
+    )]
+    pub user_token_a: Account<'info, TokenAccount>,
+
+    #[account(mut)]
+    pub user: Signer<'info>,   // ✓ signer check
+
+    pub token_program: Program<'info, Token>,  // ✓ program ID checked by Anchor
+}`,
+        commonMistakes: [
+          'Relying only on Anchor attribute macros — write explicit require!() checks for business logic invariants',
+          'Not auditing CPI targets — passing an attacker-controlled program ID to invoke() is critical',
+        ],
+        practicePrompt: 'Go through your AMM program with the Sealevel Attacks checklist. Add missing constraints. Run anchor build and fix all clippy warnings before marking done.',
+      }),
+    ],
+  },
+
+  // Week 23 — Lending Protocol Core
+  {
+    weekNumber: 23,
+    phaseWeek: 3,
+    phaseId: 6,
+    title: "Lending Protocol: Core Logic",
+    goal: "Build a lending/borrowing protocol with interest rate model.",
+    isCompleted: false,
+    tasks: [
+      makeTask("p6w3d1", 6, 23, 1, "Lending Pool State Design", "Design the on-chain state for a lending pool: deposits, borrows, interest index.", 4, "coding", { url: "https://solana.com/developers", label: "Solana — DeFi Examples", platform: "docs" }, {
+        keyPoints: [
+          'borrow_index tracks compound interest — stored as a scaled integer (e.g. 1e18 = 1.0)',
+          'total_deposits and total_borrows grow independently — utilization = borrows/deposits',
+          'Each user has a UserPosition PDA storing: deposited_shares, borrowed_amount, borrow_index_snapshot',
+          'Interest accrues on every state-touching instruction by updating borrow_index',
+          'Reserve factor: portion of interest going to protocol treasury (e.g. 10%)',
+        ],
+        codeExample: `#[account]
+pub struct LendingPool {
+    pub mint: Pubkey,              // token being lent
+    pub vault: Pubkey,             // token account holding deposits
+    pub total_deposits: u64,       // total tokens deposited
+    pub total_borrows: u64,        // total tokens borrowed
+    pub borrow_index: u128,        // compound interest index (starts at 1e18)
+    pub last_update_slot: u64,
+    pub base_rate: u64,            // annual rate at 0% utilization (bps)
+    pub slope: u64,                // rate increase per 1% utilization (bps)
+    pub reserve_factor: u64,       // protocol cut of interest (bps)
+    pub bump: u8,
+}
+
+#[account]
+pub struct UserPosition {
+    pub pool: Pubkey,
+    pub owner: Pubkey,
+    pub deposited_shares: u64,     // proportional claim on vault
+    pub borrowed_amount: u64,      // principal borrowed
+    pub borrow_index_snapshot: u128, // index at time of last borrow
+    pub bump: u8,
+}`,
+        commonMistakes: [
+          'Storing deposited_amount instead of deposited_shares — shares correctly handle interest accrual for all depositors',
+          'Not updating the interest index before any state change — leads to incorrect interest calculation',
+        ],
+        practicePrompt: 'Implement initialize_pool: create LendingPool PDA with base_rate=200 (2%), slope=800 (8%), reserve_factor=1000 (10%). Write a test verifying all fields.',
+      }),
+      makeTask("p6w3d2", 6, 23, 2, "Deposit Collateral Instruction", "Implement deposit: transfer tokens to vault, mint proportional deposit shares to user.", 4, "coding", { url: "https://solana.com/developers", label: "Solana Developers", platform: "docs" }, {
+        keyPoints: [
+          'Exchange rate = total_deposits / total_shares — new shares = deposit_amount / exchange_rate',
+          'First deposit: shares = deposit_amount (1:1 initial ratio)',
+          'Always accrue_interest() before computing exchange rate',
+          'CPI to token program: transfer deposit_amount from user to vault',
+          'Emit DepositEvent for off-chain indexers',
+        ],
+        codeExample: `pub fn deposit(ctx: Context<Deposit>, amount: u64) -> Result<()> {
+    let pool = &mut ctx.accounts.pool;
+    accrue_interest(pool)?;
+
+    // compute shares to mint
+    let shares = if pool.total_deposits == 0 {
+        amount
+    } else {
+        (amount as u128)
+            .checked_mul(pool.total_shares as u128).unwrap()
+            / pool.total_deposits as u128
+    } as u64;
+
+    // transfer tokens: user -> vault
+    token::transfer(
+        CpiContext::new(ctx.accounts.token_program.to_account_info(), Transfer {
+            from: ctx.accounts.user_token.to_account_info(),
+            to: ctx.accounts.vault.to_account_info(),
+            authority: ctx.accounts.user.to_account_info(),
+        }),
+        amount,
+    )?;
+
+    pool.total_deposits = pool.total_deposits.checked_add(amount).unwrap();
+    pool.total_shares = pool.total_shares.checked_add(shares).unwrap();
+    ctx.accounts.user_position.deposited_shares += shares;
+
+    emit!(DepositEvent { user: ctx.accounts.user.key(), amount, shares });
+    Ok(())
+}`,
+        commonMistakes: [
+          'Not calling accrue_interest before computing shares — deposits during high utilization get too many shares',
+          'Forgetting to update total_shares alongside total_deposits — the ratio drifts and breaks withdrawals',
+        ],
+        practicePrompt: 'Write a test: user A deposits 1000, user B deposits 1000. After accruing interest (advance clock 1 year), both withdraw. Verify each gets > 1000 (interest earned).',
+      }),
+      makeTask("p6w3d3", 6, 23, 3, "Borrow Against Collateral", "Implement borrow: check collateral ratio, transfer borrowed tokens, record position.", 4, "coding", { url: "https://solana.com/developers", label: "Solana Developers", platform: "docs" }, {
+        keyPoints: [
+          'Collateral factor (LTV): max borrowable = collateral_value * collateral_factor',
+          'Borrow health = collateral_value * cf / total_borrow_value — must be > 1.0',
+          'Oracle price (Pyth/Switchboard) required to convert collateral to borrow token value',
+          'Record borrow_index_snapshot at time of borrow to compute interest later',
+          'Max borrow is limited by available liquidity: require!(amount <= pool.total_deposits - pool.total_borrows)',
+        ],
+        codeExample: `pub fn borrow(ctx: Context<Borrow>, amount: u64) -> Result<()> {
+    let pool = &mut ctx.accounts.pool;
+    accrue_interest(pool)?;
+
+    let liquidity = pool.total_deposits
+        .checked_sub(pool.total_borrows)
+        .ok_or(ErrorCode::InsufficientLiquidity)?;
+    require!(amount <= liquidity, ErrorCode::InsufficientLiquidity);
+
+    // health check: collateral_value * factor >= current_borrows + new_borrow
+    let collateral_value = get_oracle_value(&ctx.accounts.collateral_oracle)?;
+    let borrow_value = get_oracle_value(&ctx.accounts.borrow_oracle)?;
+    let max_borrow = (collateral_value as u128)
+        .checked_mul(ctx.accounts.collateral_pool.collateral_factor as u128).unwrap()
+        / 10000;
+    let current_borrow_value = (ctx.accounts.user_position.borrowed_amount as u128)
+        .checked_mul(borrow_value as u128).unwrap() / 1_000_000;
+    require!(
+        current_borrow_value + amount as u128 <= max_borrow,
+        ErrorCode::InsufficientCollateral
+    );
+
+    ctx.accounts.user_position.borrowed_amount += amount;
+    ctx.accounts.user_position.borrow_index_snapshot = pool.borrow_index;
+    pool.total_borrows += amount;
+    Ok(())
+}`,
+        commonMistakes: [
+          'Using AMM spot price as oracle — flash loan attacks can manipulate spot price in the same transaction',
+          'Not storing borrow_index_snapshot — can\'t correctly calculate interest owed at repay time',
+        ],
+        practicePrompt: 'Implement get_current_debt(position, pool) that returns principal * (current_index / snapshot_index). Write a unit test with known index values.',
+      }),
+      makeTask("p6w3d4", 6, 23, 4, "Interest Rate Model", "Implement a kinked interest rate model: low base rate below kink, steep rate above.", 4, "coding", { url: "https://solana.com/developers", label: "Solana Developers", platform: "docs" }, {
+        keyPoints: [
+          'Utilization rate = total_borrows / total_deposits (0 to 100%)',
+          'Below kink (e.g. 80%): rate = base_rate + utilization * slope1',
+          'Above kink: rate = base_rate + kink * slope1 + (utilization - kink) * slope2',
+          'Compound interest: new_index = old_index * (1 + rate * elapsed_slots / slots_per_year)',
+          'Slots per year on Solana ≈ 63,072,000 (2 slots/second * 60 * 60 * 24 * 365)',
+        ],
+        codeExample: `const SLOTS_PER_YEAR: u64 = 63_072_000;
+const INDEX_SCALE: u128 = 1_000_000_000_000_000_000; // 1e18
+
+pub fn compute_borrow_rate(pool: &LendingPool) -> u64 {
+    if pool.total_deposits == 0 { return pool.base_rate; }
+    let utilization = (pool.total_borrows as u128 * 10000)
+        / pool.total_deposits as u128;
+
+    if utilization <= pool.kink_utilization as u128 {
+        pool.base_rate + (utilization as u64 * pool.slope1 / 10000)
+    } else {
+        let excess = utilization as u64 - pool.kink_utilization;
+        pool.base_rate
+            + pool.kink_utilization * pool.slope1 / 10000
+            + excess * pool.slope2 / 10000
+    }
+}
+
+pub fn accrue_interest(pool: &mut LendingPool) -> Result<()> {
+    let slot = Clock::get()?.slot;
+    let elapsed = slot.saturating_sub(pool.last_update_slot);
+    if elapsed == 0 { return Ok(()); }
+
+    let rate_bps = compute_borrow_rate(pool) as u128;
+    // index *= (1 + rate * elapsed / slots_per_year)
+    let interest_factor = INDEX_SCALE
+        + rate_bps * elapsed as u128 * INDEX_SCALE
+        / (10000 * SLOTS_PER_YEAR as u128);
+    pool.borrow_index = pool.borrow_index
+        .checked_mul(interest_factor).unwrap()
+        / INDEX_SCALE;
+    pool.last_update_slot = slot;
+    Ok(())
+}`,
+        commonMistakes: [
+          'Forgetting to scale the interest factor — multiplying borrow_index directly by the rate (not 1 + rate) wipes out deposits',
+          'Using timestamps instead of slots for interest — timestamps can be manipulated by validators within bounds',
+        ],
+        practicePrompt: 'Write a test: set up pool with base_rate=200, slope=800, kink=8000. At 50% utilization assert rate=600bps. At 90% utilization assert rate > 1400bps.',
+      }),
+      makeTask("p6w3d5", 6, 23, 5, "Liquidation Condition Logic", "Implement health factor calculation that determines when a position is liquidatable.", 4, "coding", { url: "https://solana.com/developers", label: "Solana Developers", platform: "docs" }, {
+        keyPoints: [
+          'Health factor = (collateral_value * liquidation_threshold) / total_debt_value',
+          'Position is liquidatable when health_factor < 1.0 (scaled: < 10000 in bps)',
+          'Liquidation threshold is higher than borrow LTV (e.g. LTV=75%, threshold=80%)',
+          'Price staleness check: reject oracle prices older than N slots',
+          'Partial liquidation: allow liquidating up to close_factor (e.g. 50%) per call',
+        ],
+        codeExample: `pub fn compute_health_factor(
+    collateral_value: u64,
+    liquidation_threshold: u64, // bps e.g. 8000 = 80%
+    debt_value: u64,
+) -> u64 {
+    if debt_value == 0 { return u64::MAX; } // infinite health
+    (collateral_value as u128)
+        .checked_mul(liquidation_threshold as u128).unwrap()
+        .checked_div(debt_value as u128 * 10000 / 10000).unwrap()
+        .min(u64::MAX as u128) as u64
+    // returns bps: 10000 = healthy, < 10000 = liquidatable
+}
+
+pub fn is_liquidatable(
+    collateral_value: u64,
+    liquidation_threshold: u64,
+    debt_value: u64,
+) -> bool {
+    if debt_value == 0 { return false; }
+    // collateral * threshold < debt * 10000
+    (collateral_value as u128) * liquidation_threshold as u128
+        < (debt_value as u128) * 10000
+}`,
+        commonMistakes: [
+          'Using LTV threshold (75%) for liquidation check instead of the higher liquidation threshold (80%) — creates immediate liquidation loops',
+          'Not checking oracle price freshness — stale prices can trigger false liquidations',
+        ],
+        practicePrompt: 'Create a test: deposit $1000 collateral (threshold 80%), borrow $750. Assert not liquidatable. Move oracle price down 10% (collateral = $900). Assert now liquidatable.',
+      }),
+      makeTask("p6w3d6", 6, 23, 6, "Repay Loan Instruction", "Implement repay: accept tokens, reduce borrow position with accrued interest.", 4, "coding", { url: "https://solana.com/developers", label: "Solana Developers", platform: "docs" }, {
+        keyPoints: [
+          'Current debt = principal * (current_borrow_index / snapshot_index)',
+          'Allow partial repay: clamp amount to min(requested, current_debt)',
+          'Reduce borrowed_amount by principal equivalent: repaid_principal = amount / index_ratio',
+          'Update borrow_index_snapshot after partial repay to avoid double-counting interest',
+          'Emit RepayEvent with amount, remaining_debt',
+        ],
+        codeExample: `pub fn repay(ctx: Context<Repay>, amount: u64) -> Result<()> {
+    let pool = &mut ctx.accounts.pool;
+    accrue_interest(pool)?;
+
+    let pos = &mut ctx.accounts.user_position;
+    // compute current debt including interest
+    let current_debt = (pos.borrowed_amount as u128)
+        .checked_mul(pool.borrow_index).unwrap()
+        / pos.borrow_index_snapshot;
+    let current_debt = current_debt as u64;
+
+    // clamp repay amount to actual debt
+    let repay_amount = amount.min(current_debt);
+
+    // principal reduction = repay_amount / (index / snapshot)
+    let principal_reduction = (repay_amount as u128)
+        .checked_mul(pos.borrow_index_snapshot).unwrap()
+        / pool.borrow_index;
+    let principal_reduction = principal_reduction as u64;
+
+    pos.borrowed_amount = pos.borrowed_amount
+        .saturating_sub(principal_reduction);
+    // update snapshot to current index to reset interest accrual
+    pos.borrow_index_snapshot = pool.borrow_index;
+    pool.total_borrows = pool.total_borrows.saturating_sub(principal_reduction);
+
+    // CPI: transfer repay_amount from user to vault
+    Ok(())
+}`,
+        commonMistakes: [
+          'Reducing borrowed_amount by repay_amount directly — ignores accrued interest, allows underpayment',
+          'Not updating borrow_index_snapshot after partial repay — causes interest to be counted twice on the remaining balance',
+        ],
+        practicePrompt: 'Write a test: borrow 1000, advance time 1 year at 10% APR, call repay(1000) and assert it fails (debt is now ~1100). Then repay(1100) and assert position is closed.',
+      }),
+      makeTask("p6w3d7", 6, 23, 7, "Withdraw Collateral Instruction", "Implement withdraw: allow users to reclaim deposit, guarded by borrow health check.", 4, "coding", { url: "https://solana.com/developers", label: "Solana Developers", platform: "docs" }, {
+        keyPoints: [
+          'Withdraw converts shares back to tokens: amount = shares * total_deposits / total_shares',
+          'Must verify health factor remains >= 1.0 after the withdrawal',
+          'Cannot withdraw if withdraw would make health factor < liquidation threshold',
+          'Partial withdraw is allowed as long as health factor stays healthy',
+          'CPI: transfer tokens from vault to user, burn shares from user_position',
+        ],
+        codeExample: `pub fn withdraw(ctx: Context<Withdraw>, shares: u64) -> Result<()> {
+    let pool = &mut ctx.accounts.pool;
+    accrue_interest(pool)?;
+
+    let pos = &mut ctx.accounts.user_position;
+    require!(shares <= pos.deposited_shares, ErrorCode::InsufficientShares);
+
+    // compute token amount for these shares
+    let withdraw_amount = (shares as u128)
+        .checked_mul(pool.total_deposits as u128).unwrap()
+        / pool.total_shares as u128;
+    let withdraw_amount = withdraw_amount as u64;
+
+    // health check after withdrawal
+    if pos.borrowed_amount > 0 {
+        let new_collateral_value = get_collateral_value_after_withdraw(
+            &ctx.accounts.collateral_oracle,
+            pos.deposited_shares - shares,
+            pool,
+        )?;
+        let debt_value = get_debt_value(&ctx.accounts.borrow_oracle, pos, pool)?;
+        require!(
+            !is_liquidatable(new_collateral_value, pool.liquidation_threshold, debt_value),
+            ErrorCode::WouldBecomeUndercollateralized
+        );
+    }
+
+    pool.total_deposits -= withdraw_amount;
+    pool.total_shares -= shares;
+    pos.deposited_shares -= shares;
+    // CPI transfer vault -> user
+    Ok(())
+}`,
+        commonMistakes: [
+          'Not running health check on withdraw — user can withdraw collateral while still having borrows, causing bad debt',
+          'Dividing total_deposits / total_shares with integer truncation — accumulate dust error over time; use u128 for intermediate calc',
+        ],
+        practicePrompt: 'Write a test: deposit 1000, borrow 750 (75% LTV). Try to withdraw 500 and assert it fails (WouldBecomeUndercollateralized). Repay 300, then withdraw 200 successfully.',
+      }),
+    ],
+  },
+
+  // Week 24 — Lending Safety & Liquidations
+  {
+    weekNumber: 24,
+    phaseWeek: 4,
+    phaseId: 6,
+    title: "Lending Protocol: Safety & Liquidations",
+    goal: "Add liquidation engine, price-based safety checks, and protocol fees.",
+    isCompleted: false,
+    tasks: [
+      makeTask("p6w4d1", 6, 24, 1, "Health Factor Calculation", "Implement the health factor formula and expose it via a view function for frontends.", 4, "coding", { url: "https://solana.com/developers", label: "Solana Developers", platform: "docs" }, {
+        keyPoints: [
+          'Health factor must aggregate ALL collateral positions across multiple pools',
+          'Each collateral token has its own liquidation_threshold, weighted by value',
+          'Weighted health = sum(collateral_i * threshold_i) / sum(borrow_i)',
+          'Simulate health factor client-side before submitting borrow transactions',
+          'Emit HealthFactorUpdated event so frontends can alert users in real-time',
+        ],
+        codeExample: `// Health factor aggregated across multiple collateral pools
+pub fn compute_aggregate_health(
+    collaterals: &[(u64, u64, u64)], // (amount, price, threshold_bps)
+    borrows: &[(u64, u64)],          // (amount, price)
+) -> u64 {
+    let weighted_collateral: u128 = collaterals.iter().map(|(amt, price, thresh)| {
+        (*amt as u128) * (*price as u128) * (*thresh as u128) / 10000
+    }).sum();
+
+    let total_debt: u128 = borrows.iter().map(|(amt, price)| {
+        (*amt as u128) * (*price as u128)
+    }).sum();
+
+    if total_debt == 0 { return u64::MAX; }
+    // returns bps: 10000 = exactly at threshold
+    (weighted_collateral / total_debt).min(u64::MAX as u128) as u64
+}`,
+        commonMistakes: [
+          'Computing health factor only on a single collateral pool when user has multiple — misses the aggregate risk',
+          'Using integer division for health factor — losing precision causes incorrect liquidation triggers',
+        ],
+        practicePrompt: 'Write a function that takes a UserPortfolio with Vec<CollateralPosition> and Vec<BorrowPosition> and returns (health_factor, max_additional_borrow, safe_withdraw_amount).',
+      }),
+      makeTask("p6w4d2", 6, 24, 2, "Liquidation Bonus Mechanics", "Implement the liquidation instruction with bonus incentive for liquidators.", 4, "coding", { url: "https://solana.com/developers", label: "Solana Developers", platform: "docs" }, {
+        keyPoints: [
+          'Liquidators repay the borrower\'s debt and receive collateral at a discount (5-15% bonus)',
+          'Liquidation bonus = repaid_debt_value * (1 + bonus_factor)',
+          'Close factor limits how much debt can be liquidated per call (e.g. 50%)',
+          'Dynamic bonus: Aave increases bonus as health factor worsens to incentivize fast liquidation',
+          'Liquidation profit must be positive — require!(collateral_received_value > debt_paid_value)',
+        ],
+        codeExample: `pub fn liquidate(
+    ctx: Context<Liquidate>,
+    repay_amount: u64,
+) -> Result<()> {
+    let pool = &mut ctx.accounts.borrow_pool;
+    accrue_interest(pool)?;
+    let pos = &mut ctx.accounts.user_position;
+
+    // verify position is liquidatable
+    let collateral_value = get_oracle_value(&ctx.accounts.collateral_oracle)?;
+    let debt_value = get_oracle_value(&ctx.accounts.borrow_oracle)?;
+    require!(
+        is_liquidatable(collateral_value, pool.liquidation_threshold, debt_value),
+        ErrorCode::PositionHealthy
+    );
+
+    // close factor: max 50% of debt per liquidation
+    let max_repay = get_current_debt(pos, pool) / 2;
+    let repay_amount = repay_amount.min(max_repay);
+
+    // collateral seized = repay_value * (1 + bonus) in collateral tokens
+    let bonus_factor = 10500u64; // 105% = 5% bonus
+    let seized_value = (repay_amount as u128)
+        .checked_mul(bonus_factor as u128).unwrap() / 10000;
+    let seized_collateral = (seized_value * 1_000_000
+        / collateral_value as u128) as u64;
+
+    // transfer: liquidator repays debt, receives seized_collateral
+    pool.total_borrows -= repay_amount;
+    ctx.accounts.collateral_position.deposited_shares -= seized_collateral;
+    Ok(())
+}`,
+        commonMistakes: [
+          'Setting liquidation bonus too high (>15%) — creates bank run dynamics where LPs rush to exit before liquidations',
+          'Not enforcing close_factor — full liquidation in one call destabilizes protocol and removes borrower equity',
+        ],
+        practicePrompt: 'Write a test: setup position at 95% LTV (undercollateralized). Liquidate 50%. Assert debt reduced by 50% and liquidator received collateral worth 5% more than repaid.',
+      }),
+      makeTask("p6w4d3", 6, 24, 3, "Oracle Price Integration", "Integrate Pyth or Switchboard oracle prices into the lending protocol.", 4, "coding", { url: "https://docs.pyth.network/price-feeds/use-real-data/solana", label: "Pyth Solana Docs", platform: "docs" }, {
+        keyPoints: [
+          'Pyth provides confidence intervals — reject prices where confidence > price * 1%',
+          'Switchboard aggregates multiple sources and provides on-chain median',
+          'Price staleness: reject oracle data older than 60 seconds (on mainnet)',
+          'Pyth exponent: price = price_raw * 10^exponent (negative exponents are common)',
+          'Always use the primary oracle with a fallback oracle for redundancy',
+        ],
+        codeExample: `use pyth_sdk_solana::load_price_feed_from_account_info;
+
+pub fn get_pyth_price(price_account: &AccountInfo) -> Result<u64> {
+    let price_feed = load_price_feed_from_account_info(price_account)
+        .map_err(|_| error!(ErrorCode::InvalidOracle))?;
+
+    let price = price_feed
+        .get_price_no_older_than(60) // max 60 seconds old
+        .ok_or(error!(ErrorCode::PriceStale))?;
+
+    // confidence check: reject if confidence > 1% of price
+    require!(
+        price.conf < (price.price.unsigned_abs() / 100),
+        ErrorCode::PriceConfidenceTooWide
+    );
+
+    // normalize to 6 decimal places
+    let price_u64 = if price.expo >= 0 {
+        (price.price as u64)
+            .checked_mul(10u64.pow(price.expo as u32)).unwrap()
+    } else {
+        (price.price as u64)
+            / 10u64.pow((-price.expo) as u32)
+    };
+    Ok(price_u64)
+}`,
+        commonMistakes: [
+          'Ignoring the confidence interval — a very wide confidence band means the price is unreliable',
+          'Forgetting to handle negative exponents — Pyth SOL price uses expo=-8, raw price is 6_000_000_00 = $60.00',
+        ],
+        practicePrompt: 'Write a mock oracle account for testing: implement a struct MockOracle with set_price(price: u64) and have your get_oracle_value function work with both Pyth and MockOracle.',
+      }),
+      makeTask("p6w4d4", 6, 24, 4, "Bad Debt Handling", "Design a mechanism to handle undercollateralized positions that can\'t be profitably liquidated.", 4, "reading", { url: "https://solana.com/developers", label: "Solana Developers", platform: "docs" }, {
+        keyPoints: [
+          'Bad debt occurs when collateral_value < debt_value — liquidation is not profitable',
+          'Protocol insurance fund absorbs bad debt to protect depositors',
+          'Socialized losses: bad debt is spread across all depositors (total_deposits decreases)',
+          'Automated market liquidators reduce bad debt risk by liquidating early',
+          'Aave v3 uses an eMode and supply/borrow caps to limit concentration risk',
+        ],
+        codeExample: `#[account]
+pub struct InsuranceFund {
+    pub balance: u64,
+    pub authority: Pubkey,
+    pub bump: u8,
+}
+
+pub fn handle_bad_debt(
+    ctx: Context<HandleBadDebt>,
+    position_owner: Pubkey,
+) -> Result<()> {
+    let pool = &mut ctx.accounts.pool;
+    let pos = &mut ctx.accounts.user_position;
+
+    // verify position is truly bad debt (collateral < debt)
+    let collateral_val = get_oracle_value(&ctx.accounts.oracle)?;
+    let debt_val = get_current_debt(pos, pool);
+    require!(collateral_val < debt_val, ErrorCode::NotBadDebt);
+
+    let shortfall = debt_val - collateral_val;
+
+    // try insurance fund first
+    if ctx.accounts.insurance_fund.balance >= shortfall {
+        ctx.accounts.insurance_fund.balance -= shortfall;
+        pool.total_deposits -= shortfall; // restore pool accounting
+    } else {
+        // socialize losses across all depositors
+        pool.total_deposits = pool.total_deposits.saturating_sub(shortfall);
+    }
+
+    // clear the bad position
+    pos.borrowed_amount = 0;
+    pos.deposited_shares = 0;
+    Ok(())
+}`,
+        commonMistakes: [
+          'Not having an insurance fund at all — protocol goes insolvent on first bad debt event',
+          'Socializing losses without an event — depositors need to know their balance decreased',
+        ],
+        practicePrompt: 'Implement a deposit_to_insurance_fund instruction and a governance-controlled withdraw from it. Add a require that governance multisig signs withdrawals.',
+      }),
+      makeTask("p6w4d5", 6, 24, 5, "Protocol Fee Treasury", "Implement fee collection and treasury management for the lending protocol.", 4, "coding", { url: "https://solana.com/developers", label: "Solana Developers", platform: "docs" }, {
+        keyPoints: [
+          'Reserve factor (e.g. 10%): 10% of interest paid goes to treasury, not depositors',
+          'Accrue treasury fees alongside borrow index update in accrue_interest()',
+          'Treasury PDA is controlled by governance or multisig authority',
+          'Harvest fees instruction: transfer accumulated fees from pool to treasury',
+          'Fee revenues fund: insurance fund top-ups, bug bounties, team compensation',
+        ],
+        codeExample: `pub fn accrue_interest_with_fees(pool: &mut LendingPool) -> Result<()> {
+    let slot = Clock::get()?.slot;
+    let elapsed = slot.saturating_sub(pool.last_update_slot);
+    if elapsed == 0 { return Ok(()); }
+
+    let interest_earned = compute_interest_earned(pool, elapsed);
+
+    // split interest: reserve_factor goes to treasury
+    let protocol_fee = (interest_earned as u128)
+        .checked_mul(pool.reserve_factor as u128).unwrap()
+        / 10000;
+    let lp_share = interest_earned - protocol_fee as u64;
+
+    pool.total_deposits += lp_share;
+    pool.accrued_fees += protocol_fee as u64;
+    pool.borrow_index = update_borrow_index(pool, elapsed);
+    pool.last_update_slot = slot;
+    Ok(())
+}
+
+pub fn harvest_fees(ctx: Context<HarvestFees>) -> Result<()> {
+    let pool = &mut ctx.accounts.pool;
+    let fees = pool.accrued_fees;
+    require!(fees > 0, ErrorCode::NoFeesToHarvest);
+    pool.accrued_fees = 0;
+    // CPI: transfer fees from vault to treasury
+    emit!(FeesHarvestedEvent { amount: fees });
+    Ok(())
+}`,
+        commonMistakes: [
+          'Crediting protocol fees to total_deposits — inflates LP share values incorrectly; fees must be tracked separately',
+          'Not enforcing governance on harvest_fees — anyone could drain treasury timing arbitrage',
+        ],
+        practicePrompt: 'Write a test: borrow 1000 for 1 year at 10% APR with 10% reserve factor. Assert accrued_fees == 10 (10% of 100 interest). Harvest and verify treasury balance.',
+      }),
+      makeTask("p6w4d6", 6, 24, 6, "Emergency Pause Mechanism", "Implement circuit breakers and governance-controlled pause for protocol safety.", 4, "coding", { url: "https://solana.com/developers", label: "Solana Developers", platform: "docs" }, {
+        keyPoints: [
+          'paused flag on pool: all state-modifying instructions check !pool.paused',
+          'Only guardian (multisig or timelock) can set paused = true',
+          'Unpause should require governance vote with minimum delay (e.g. 24h timelock)',
+          'Partial pause: can pause borrows only while allowing repays and withdrawals',
+          'Emit PausedEvent with reason string for transparency',
+        ],
+        codeExample: `#[account]
+pub struct Pool {
+    // ...
+    pub paused: bool,
+    pub borrow_paused: bool,    // pauses only new borrows
+    pub guardian: Pubkey,       // can pause immediately
+    pub governance: Pubkey,     // can unpause (with delay)
+}
+
+// macro to add to all state-modifying instructions
+macro_rules! require_not_paused {
+    ($pool:expr) => {
+        require!(!$pool.paused, ErrorCode::ProtocolPaused)
+    };
+}
+
+pub fn pause(ctx: Context<Pause>) -> Result<()> {
+    require!(
+        ctx.accounts.guardian.key() == ctx.accounts.pool.guardian,
+        ErrorCode::Unauthorized
+    );
+    ctx.accounts.pool.paused = true;
+    emit!(PausedEvent {
+        pool: ctx.accounts.pool.key(),
+        guardian: ctx.accounts.guardian.key(),
+        timestamp: Clock::get()?.unix_timestamp,
+    });
+    Ok(())
+}
+
+pub fn unpause(ctx: Context<Unpause>, timelock_id: u64) -> Result<()> {
+    // verify timelock has elapsed
+    let timelock = &ctx.accounts.timelock;
+    require!(timelock.id == timelock_id, ErrorCode::InvalidTimelock);
+    let now = Clock::get()?.unix_timestamp;
+    require!(now >= timelock.execute_at, ErrorCode::TimelockNotReady);
+    ctx.accounts.pool.paused = false;
+    Ok(())
+}`,
+        commonMistakes: [
+          'Only having one pause level — must be able to pause borrows without blocking repays (users need to exit)',
+          'Guardian == deployer wallet — should be a multisig to prevent single point of failure',
+        ],
+        practicePrompt: 'Write a test: pause the pool, attempt a borrow (should fail with ProtocolPaused), attempt a repay (should succeed — repays always allowed). Then unpause and borrow again.',
+      }),
+      makeTask("p6w4d7", 6, 24, 7, "Full Lending Protocol Tests", "Write comprehensive integration tests for the complete lending protocol.", 4, "coding", { url: "https://www.anchor-lang.com/docs/testing/basics", label: "Anchor Testing Guide", platform: "docs" }, {
+        keyPoints: [
+          'Test happy path: deposit → borrow → accrue interest → repay → withdraw',
+          'Test liquidation: manipulate oracle price to trigger health < 1.0, assert liquidator profits',
+          'Test pause: guardian pauses, borrow fails, repay succeeds, guardian unpauses',
+          'Test bad debt: price crashes below debt, insurance fund absorbs shortfall',
+          'Use Bankrun for fast testing without spinning up full local validator',
+        ],
+        codeExample: `describe("Lending Protocol", () => {
+  it("full lifecycle: deposit -> borrow -> repay -> withdraw", async () => {
+    await deposit(user, 1000_000);
+    await borrow(user, 500_000);
+
+    // advance time to accrue interest
+    await provider.context.warp_to_slot(SLOTS_PER_YEAR);
+
+    const debt = await getCurrentDebt(user);
+    assert.ok(debt.gtn(500_000), "interest should accrue");
+
+    await repay(user, debt);
+    const position = await program.account.userPosition.fetch(userPositionPda);
+    assert.ok(position.borrowedAmount.eqn(0));
+
+    await withdraw(user, await getShares(user));
+    const balance = await getTokenBalance(userTokenAccount);
+    assert.ok(balance.gtn(1000_000), "should earn interest as LP");
+  });
+
+  it("liquidates undercollateralized position", async () => {
+    await deposit(user, 1000_000);
+    await borrow(user, 750_000); // 75% LTV
+
+    // crash collateral price 30%
+    await mockOracle.setPrice(700_000);
+
+    const liquidatorBefore = await getTokenBalance(liquidatorTokenAccount);
+    await liquidate(liquidator, user, 375_000);
+    const liquidatorAfter = await getTokenBalance(liquidatorTokenAccount);
+    assert.ok(
+      liquidatorAfter.sub(liquidatorBefore).gtn(375_000),
+      "liquidator should profit from bonus"
+    );
+  });
+});`,
+        commonMistakes: [
+          'Not testing partial repay — this edge case frequently has off-by-one bugs in borrow_index_snapshot updates',
+          'Skipping the bad debt scenario — it is the most catastrophic failure mode and must be tested explicitly',
+        ],
+        practicePrompt: 'Run anchor test with coverage. Identify any uncovered instruction paths and write tests for them. Target: every instruction has at least one success and one failure test case.',
+      }),
+    ],
+  },
+
+  // Week 25 — NFT Programs
+  {
+    weekNumber: 25,
+    phaseWeek: 5,
+    phaseId: 6,
+    title: "NFT Programs: Mint & Metadata",
+    goal: "Build a custom NFT program with metadata, collection, and royalties.",
+    isCompleted: false,
+    tasks: [
+      makeTask("p6w5d1", 6, 25, 1, "NFT Mint Program Structure", "Set up an Anchor program to mint NFTs using the SPL Token program with Metaplex metadata.", 4, "coding", { url: "https://developers.metaplex.com/", label: "Metaplex Developers", platform: "custom" }, {
+        keyPoints: [
+          'NFT = SPL Token with supply=1, decimals=0, and associated metadata account',
+          'Metaplex Token Metadata program stores: name, symbol, uri (points to JSON off-chain)',
+          'Mint authority is transferred to a PDA or null after minting to prevent re-minting',
+          'Freeze authority can be retained by creator to enable utilities (staking, soul-bound tokens)',
+          'mpl-token-metadata crate provides CPI helpers for metadata program instructions',
+        ],
+        codeExample: `use anchor_lang::prelude::*;
+use anchor_spl::token::{self, Token, Mint, MintTo};
+use mpl_token_metadata::instruction::create_metadata_accounts_v3;
+
+pub fn mint_nft(
+    ctx: Context<MintNft>,
+    name: String,
+    symbol: String,
+    uri: String,
+) -> Result<()> {
+    // 1. Mint 1 token to recipient
+    token::mint_to(
+        CpiContext::new(ctx.accounts.token_program.to_account_info(), MintTo {
+            mint: ctx.accounts.mint.to_account_info(),
+            to: ctx.accounts.recipient_ata.to_account_info(),
+            authority: ctx.accounts.authority.to_account_info(),
+        }),
+        1,
+    )?;
+
+    // 2. Create metadata account via Metaplex CPI
+    let creators = vec![mpl_token_metadata::state::Creator {
+        address: ctx.accounts.creator.key(),
+        verified: false,
+        share: 100,
+    }];
+    let ix = create_metadata_accounts_v3(
+        ctx.accounts.metadata_program.key(),
+        ctx.accounts.metadata.key(),
+        ctx.accounts.mint.key(),
+        ctx.accounts.authority.key(),
+        ctx.accounts.payer.key(),
+        ctx.accounts.authority.key(),
+        name, symbol, uri,
+        Some(creators),
+        500, // royalty: 5% (basis points)
+        true, false, None, None, None,
+    );
+    anchor_lang::solana_program::program::invoke(&ix, &[/* accounts */])?;
+    Ok(())
+}`,
+        commonMistakes: [
+          'Not revoking mint authority after minting — anyone with authority can mint more, breaking the 1-of-1 guarantee',
+          'Hardcoding the metadata URI — should be passed as a parameter, pointing to an IPFS/Arweave JSON file',
+        ],
+        practicePrompt: 'Write a mint_nft instruction that mints one NFT, creates metadata with name/symbol/uri params, then sets mint_authority to None (revoke). Verify supply==1 in tests.',
+      }),
+      makeTask("p6w5d2", 6, 25, 2, "Metadata Account with Metaplex", "Create and update Metaplex metadata accounts: name, symbol, URI, attributes.", 4, "coding", { url: "https://developers.metaplex.com/token-metadata", label: "Token Metadata Docs", platform: "custom" }, {
+        keyPoints: [
+          'Metadata account PDA: seeds = ["metadata", mpl_token_metadata::id(), mint]',
+          'URI points to JSON: { name, image, attributes: [{trait_type, value}] }',
+          'is_mutable=true allows update_authority to change metadata post-mint',
+          'Master Edition account limits print editions and stores max_supply',
+          'Verified creator flag requires a CPI from the creator to sign the metadata',
+        ],
+        codeExample: `// Metadata JSON structure (stored off-chain at URI)
+{
+  "name": "Ardan NFT #1",
+  "symbol": "ARDAN",
+  "description": "A rare Ardan Labs blockchain developer cert NFT",
+  "image": "https://arweave.net/abc123/1.png",
+  "attributes": [
+    { "trait_type": "Level", "value": "Expert" },
+    { "trait_type": "Language", "value": "Rust" },
+    { "trait_type": "Rarity", "value": "Legendary" }
+  ],
+  "properties": {
+    "files": [{ "uri": "https://arweave.net/abc123/1.png", "type": "image/png" }],
+    "creators": [{ "address": "YOUR_WALLET", "share": 100 }]
+  }
+}
+
+// On-chain: update_metadata CPI
+pub fn update_nft_uri(ctx: Context<UpdateMetadata>, new_uri: String) -> Result<()> {
+    let ix = mpl_token_metadata::instruction::update_metadata_accounts_v2(
+        ctx.accounts.metadata_program.key(),
+        ctx.accounts.metadata.key(),
+        ctx.accounts.update_authority.key(),
+        None, // new update_authority
+        Some(DataV2 { name: "..".to_string(), symbol: "..".to_string(), uri: new_uri,
+            seller_fee_basis_points: 500, creators: None, collection: None, uses: None }),
+        None,
+        Some(true), // is_mutable
+    );
+    invoke(&ix, &[/* ... */])?;
+    Ok(())
+}`,
+        commonMistakes: [
+          'Pointing URI to a centralized server — if the server goes down, metadata is lost; use Arweave/IPFS',
+          'Setting is_mutable=false before the project is stable — can never fix metadata bugs after',
+        ],
+        practicePrompt: 'Upload a test JSON file to IPFS via nft.storage, mint an NFT pointing to it, fetch metadata on-chain with metaplex JS SDK, verify all attributes match.',
+      }),
+      makeTask("p6w5d3", 6, 25, 3, "On-Chain Royalty Enforcement", "Implement royalty enforcement using Metaplex\'s Programmable NFTs (pNFTs).", 4, "reading", { url: "https://developers.metaplex.com/token-metadata/pnfts", label: "Metaplex pNFTs", platform: "custom" }, {
+        keyPoints: [
+          'Standard NFTs: royalties are honor-based (marketplaces can choose to pay or not)',
+          'pNFTs: transfers are locked by RuleSet — only authorized programs (that pay royalties) can transfer',
+          'RuleSet is stored in a separate account and checked by Token Auth Rules program',
+          'Creator must set: TokenStandard::ProgrammableNonFungible in metadata',
+          'Cost of pNFT enforcement: higher CU usage (~40k vs ~10k for standard)',
+        ],
+        codeExample: `// Programmable NFT (pNFT) transfer — royalties enforced on-chain
+use mpl_token_metadata::instruction::builders::TransferBuilder;
+
+pub fn transfer_pnft(ctx: Context<TransferPnft>) -> Result<()> {
+    // pNFT transfer requires delegate, token_record, and rule_set
+    let transfer_args = mpl_token_metadata::instruction::TransferArgs::V1 {
+        amount: 1,
+        authorization_data: None,
+    };
+
+    let transfer_ix = TransferBuilder::new()
+        .token(ctx.accounts.token.key())
+        .token_owner(ctx.accounts.owner.key())
+        .destination_token(ctx.accounts.destination_token.key())
+        .destination_owner(ctx.accounts.destination_owner.key())
+        .mint(ctx.accounts.mint.key())
+        .metadata(ctx.accounts.metadata.key())
+        .edition(ctx.accounts.edition.key())
+        .token_record(ctx.accounts.token_record.key())
+        .destination_token_record(ctx.accounts.dest_token_record.key())
+        .authority(ctx.accounts.owner.key())
+        .payer(ctx.accounts.payer.key())
+        .system_program(system_program::id())
+        .sysvar_instructions(sysvar::instructions::id())
+        .spl_token_program(spl_token::id())
+        .spl_ata_program(spl_associated_token_account::id())
+        .build(transfer_args)
+        .unwrap()
+        .instruction();
+    invoke(&transfer_ix, &[/* ... */])?;
+    Ok(())
+}`,
+        commonMistakes: [
+          'Using standard NFT (TokenStandard::NonFungible) when you need royalty enforcement — marketplaces can bypass royalties',
+          'Forgetting the token_record account in pNFT transfers — leads to instruction error that is hard to debug',
+        ],
+        practicePrompt: 'Read the Metaplex pNFT documentation and write a 1-page summary: what is a RuleSet, how does it prevent royalty bypass, and what is the cost/benefit tradeoff?',
+      }),
+      makeTask("p6w5d4", 6, 25, 4, "Collection Verification", "Create a Metaplex verified collection and add NFTs to it.", 4, "coding", { url: "https://developers.metaplex.com/token-metadata/collections", label: "Metaplex Collections", platform: "custom" }, {
+        keyPoints: [
+          'Collection NFT: special NFT whose mint is used as collection identifier',
+          'verify_collection CPI marks the child NFT as part of the verified collection',
+          'Verified bit prevents fake collections — only collection authority can verify',
+          'Collection metadata stores: size (number of verified NFTs)',
+          'Unverify allows removing NFTs from collection (e.g., for burns or transfers)',
+        ],
+        codeExample: `pub fn create_collection(
+    ctx: Context<CreateCollection>,
+    name: String,
+    symbol: String,
+    uri: String,
+) -> Result<()> {
+    // Mint the collection NFT (same as regular NFT but with CollectionDetails)
+    let collection_details = mpl_token_metadata::state::CollectionDetails::V1 { size: 0 };
+    // create_metadata with collection_details = Some(...)
+    // create_master_edition with max_supply = Some(0) (no prints)
+    Ok(())
+}
+
+pub fn add_to_collection(ctx: Context<AddToCollection>) -> Result<()> {
+    // verify_collection_v1 CPI — must be signed by collection update_authority
+    let ix = mpl_token_metadata::instruction::verify_collection(
+        ctx.accounts.metadata_program.key(),
+        ctx.accounts.nft_metadata.key(),
+        ctx.accounts.collection_authority.key(),
+        ctx.accounts.payer.key(),
+        ctx.accounts.collection_mint.key(),
+        ctx.accounts.collection_metadata.key(),
+        ctx.accounts.collection_master_edition.key(),
+        None, // collection_authority_record (None = direct authority)
+    );
+    invoke_signed(&ix, &[/* ... */], &[/* signer seeds */])?;
+    Ok(())
+}`,
+        commonMistakes: [
+          'Creating collection metadata without CollectionDetails — collection size won\'t be tracked on-chain',
+          'Using verify_collection with the wrong master edition account — Metaplex will silently fail or panic',
+        ],
+        practicePrompt: 'Create a collection NFT, mint 3 child NFTs, verify all 3 as part of the collection, and assert collection_metadata.collection_details.size == 3.',
+      }),
+      makeTask("p6w5d5", 6, 25, 5, "Update Authority Controls", "Manage update authority delegation and freeze authority for NFT utilities.", 4, "coding", { url: "https://developers.metaplex.com/token-metadata", label: "Token Metadata", platform: "custom" }, {
+        keyPoints: [
+          'update_authority can update metadata URI, name, and creators',
+          'Transferring update_authority to null makes NFT permanently immutable',
+          'Delegating update_authority to a program enables on-chain trait evolution',
+          'Freeze authority locks the token account — used for staking without custody',
+          'Thaw + freeze cycle: stake NFT by freezing, unstake by thawing',
+        ],
+        codeExample: `// NFT staking via freeze authority
+pub fn stake_nft(ctx: Context<StakeNft>) -> Result<()> {
+    // Transfer update authority to staking program PDA
+    // Freeze the token account (token cannot be transferred while frozen)
+    let freeze_ix = spl_token::instruction::freeze_account(
+        ctx.accounts.token_program.key,
+        ctx.accounts.nft_token_account.key,
+        ctx.accounts.nft_mint.key,
+        ctx.accounts.freeze_authority.key, // staking program PDA
+        &[],
+    )?;
+    anchor_lang::solana_program::program::invoke_signed(
+        &freeze_ix,
+        &[
+            ctx.accounts.nft_token_account.to_account_info(),
+            ctx.accounts.nft_mint.to_account_info(),
+            ctx.accounts.freeze_authority.to_account_info(),
+        ],
+        &[&[b"stake-authority", &[ctx.accounts.config.bump]]],
+    )?;
+
+    // Record staking start time for reward calculation
+    ctx.accounts.stake_record.staked_at = Clock::get()?.unix_timestamp;
+    ctx.accounts.stake_record.mint = ctx.accounts.nft_mint.key();
+    Ok(())
+}`,
+        commonMistakes: [
+          'Using token custody (transferring NFT to program) instead of freeze — custody is risky; freeze lets user keep the NFT',
+          'Forgetting to thaw before any metadata update — frozen accounts reject all instructions including metadata updates',
+        ],
+        practicePrompt: 'Implement stake_nft (freeze) and unstake_nft (thaw + calculate_rewards). Rewards = 10 tokens per day staked. Write test advancing clock 7 days and claiming 70 tokens.',
+      }),
+      makeTask("p6w5d6", 6, 25, 6, "Burn NFT Instruction", "Implement NFT burn with metadata cleanup to reclaim rent.", 4, "coding", { url: "https://developers.metaplex.com/token-metadata/burn", label: "Token Metadata Burn", platform: "custom" }, {
+        keyPoints: [
+          'Burning an NFT requires: burning the token, closing token account, closing metadata, closing edition',
+          'Use Metaplex BurnBuilder to handle all accounts correctly in one CPI',
+          'Closing metadata/edition accounts returns ~0.015 SOL in rent to the user',
+          'Must verify the signer is the NFT owner or has burn_delegate authority',
+          'Collection size should be decremented when a collection NFT is burned',
+        ],
+        codeExample: `use mpl_token_metadata::instruction::builders::BurnBuilder;
+
+pub fn burn_nft(ctx: Context<BurnNft>) -> Result<()> {
+    let burn_ix = BurnBuilder::new()
+        .authority(ctx.accounts.owner.key())
+        .token_owner(ctx.accounts.owner.key())
+        .token(ctx.accounts.token_account.key())
+        .mint(ctx.accounts.mint.key())
+        .metadata(ctx.accounts.metadata.key())
+        .edition(ctx.accounts.edition.key())
+        .spl_token_program(spl_token::id())
+        .build(mpl_token_metadata::instruction::BurnArgs::V1 { amount: 1 })
+        .unwrap()
+        .instruction();
+
+    invoke(&burn_ix, &[
+        ctx.accounts.owner.to_account_info(),
+        ctx.accounts.token_account.to_account_info(),
+        ctx.accounts.mint.to_account_info(),
+        ctx.accounts.metadata.to_account_info(),
+        ctx.accounts.edition.to_account_info(),
+    ])?;
+    Ok(())
+}`,
+        commonMistakes: [
+          'Only burning the SPL token and not the metadata/edition accounts — wastes ~0.015 SOL in rent that should be returned',
+          'Not checking that the signer owns the NFT — any caller could burn someone else\'s NFT',
+        ],
+        practicePrompt: 'Mint an NFT, record the owner SOL balance, burn the NFT, assert owner balance increased by ~0.015 SOL (rent reclaim). Assert token account no longer exists.',
+      }),
+      makeTask("p6w5d7", 6, 25, 7, "NFT Marketplace Listing (Preview)", "Build a basic listing mechanism using PDA escrow to prepare for Week 26.", 4, "coding", { url: "https://developers.metaplex.com/", label: "Metaplex Developers", platform: "custom" }, {
+        keyPoints: [
+          'Listing PDA stores: seller, mint, price, expiry, and list timestamp',
+          'Escrow: NFT is transferred from seller\'s ATA to a PDA-controlled ATA on listing',
+          'Cancel listing: return NFT to seller, close listing account, recover rent',
+          'Purchase: buyer pays seller, NFT transferred to buyer, listing account closed',
+          'List + buy must be atomic — use single transaction for buy to prevent race conditions',
+        ],
+        codeExample: `#[account]
+pub struct Listing {
+    pub seller: Pubkey,
+    pub mint: Pubkey,
+    pub price: u64,        // in lamports
+    pub listed_at: i64,
+    pub expiry: i64,       // 0 = never expires
+    pub bump: u8,
+    pub escrow_bump: u8,
+}
+
+impl Listing {
+    pub const LEN: usize = 8 + 32 + 32 + 8 + 8 + 8 + 1 + 1;
+}
+
+pub fn list_nft(ctx: Context<ListNft>, price: u64, expiry: i64) -> Result<()> {
+    let listing = &mut ctx.accounts.listing;
+    listing.seller = ctx.accounts.seller.key();
+    listing.mint = ctx.accounts.mint.key();
+    listing.price = price;
+    listing.listed_at = Clock::get()?.unix_timestamp;
+    listing.expiry = expiry;
+    listing.bump = ctx.bumps.listing;
+
+    // Transfer NFT to escrow ATA (owned by listing PDA)
+    token::transfer(
+        CpiContext::new(ctx.accounts.token_program.to_account_info(), Transfer {
+            from: ctx.accounts.seller_ata.to_account_info(),
+            to: ctx.accounts.escrow_ata.to_account_info(),
+            authority: ctx.accounts.seller.to_account_info(),
+        }),
+        1,
+    )?;
+    Ok(())
+}`,
+        commonMistakes: [
+          'Storing NFT in seller\'s ATA instead of escrow — seller can transfer it out and listing becomes a trap',
+          'Not enforcing expiry on purchase — expired listings should reject buys even if price matches',
+        ],
+        practicePrompt: 'Implement cancel_listing: verify signer == listing.seller, transfer NFT back from escrow to seller, close listing account and escrow ATA, return rent to seller.',
+      }),
+    ],
+  },
+
+  // Week 26 — NFT Marketplace
+  {
+    weekNumber: 26,
+    phaseWeek: 6,
+    phaseId: 6,
+    title: "NFT Marketplace: Listing & Trading",
+    goal: "Build NFT marketplace with listing, bidding, and royalty distribution.",
+    isCompleted: false,
+    tasks: [
+      makeTask("p6w6d1", 6, 26, 1, "List NFT for Sale (PDA Escrow)", "Build the complete list instruction with PDA-controlled escrow account.", 4, "coding", { url: "https://developers.metaplex.com/", label: "Metaplex Docs", platform: "custom" }, {
+        keyPoints: [
+          'Escrow ATA is derived: seeds = ["escrow", listing.key()] — owned by listing PDA',
+          'Listing PDA seeds: ["listing", seller.key(), mint.key()] — unique per seller/NFT pair',
+          'Delegating instead of transferring: seller keeps token but delegates to listing PDA',
+          'Transfer-to-escrow approach is simpler and avoids delegate complexity',
+          'Marketplace authority account stores: fee_bps, treasury, and governance key',
+        ],
+        codeExample: `#[derive(Accounts)]
+pub struct ListNft<'info> {
+    #[account(mut)]
+    pub seller: Signer<'info>,
+    pub mint: Account<'info, Mint>,
+    #[account(
+        init, payer = seller, space = Listing::LEN,
+        seeds = [b"listing", seller.key().as_ref(), mint.key().as_ref()],
+        bump
+    )]
+    pub listing: Account<'info, Listing>,
+    #[account(
+        mut,
+        constraint = seller_ata.owner == seller.key(),
+        constraint = seller_ata.mint == mint.key(),
+        constraint = seller_ata.amount == 1 @ ErrorCode::NotNftOwner
+    )]
+    pub seller_ata: Account<'info, TokenAccount>,
+    #[account(
+        init, payer = seller,
+        associated_token::mint = mint,
+        associated_token::authority = listing,
+    )]
+    pub escrow_ata: Account<'info, TokenAccount>,
+    pub token_program: Program<'info, Token>,
+    pub associated_token_program: Program<'info, AssociatedToken>,
+    pub system_program: Program<'info, System>,
+}`,
+        commonMistakes: [
+          'Not constraining seller_ata.amount == 1 before listing — seller could list an empty ATA',
+          'Using delegate instead of escrow — delegate can be revoked by seller after listing, breaking purchases',
+        ],
+        practicePrompt: 'Implement the full list_nft instruction. Write two tests: (1) list succeeds, escrow has 1 token. (2) list fails when seller does not own the NFT.',
+      }),
+      makeTask("p6w6d2", 6, 26, 2, "Cancel Listing", "Implement cancel_listing with NFT return and rent recovery.", 4, "coding", { url: "https://developers.metaplex.com/", label: "Metaplex Docs", platform: "custom" }, {
+        keyPoints: [
+          'Only the original seller can cancel — verify listing.seller == signer.key()',
+          'Close escrow_ata: transfer NFT back, then close the token account to recover rent',
+          'Close listing account: set its lamports to 0, transfer to seller',
+          'Use Anchor #[account(mut, close = seller)] to handle closing automatically',
+          'After cancel, listing PDA is gone — next list creates a new one',
+        ],
+        codeExample: `#[derive(Accounts)]
+pub struct CancelListing<'info> {
+    #[account(mut)]
+    pub seller: Signer<'info>,
+    #[account(
+        mut,
+        close = seller,   // auto-close and return lamports to seller
+        seeds = [b"listing", seller.key().as_ref(), listing.mint.as_ref()],
+        bump = listing.bump,
+        constraint = listing.seller == seller.key() @ ErrorCode::Unauthorized
+    )]
+    pub listing: Account<'info, Listing>,
+    #[account(mut, constraint = escrow_ata.owner == listing.key())]
+    pub escrow_ata: Account<'info, TokenAccount>,
+    #[account(mut, constraint = seller_ata.owner == seller.key())]
+    pub seller_ata: Account<'info, TokenAccount>,
+    pub token_program: Program<'info, Token>,
+}
+
+pub fn cancel_listing(ctx: Context<CancelListing>) -> Result<()> {
+    let listing = &ctx.accounts.listing;
+    let seeds = &[
+        b"listing", listing.seller.as_ref(), listing.mint.as_ref(),
+        &[listing.bump],
+    ];
+    // Transfer NFT back to seller using listing PDA as signer
+    token::transfer(
+        CpiContext::new_with_signer(
+            ctx.accounts.token_program.to_account_info(),
+            Transfer {
+                from: ctx.accounts.escrow_ata.to_account_info(),
+                to: ctx.accounts.seller_ata.to_account_info(),
+                authority: ctx.accounts.listing.to_account_info(),
+            },
+            &[seeds],
+        ),
+        1,
+    )?;
+    // close = seller in the constraint handles listing account closing
+    Ok(())
+}`,
+        commonMistakes: [
+          'Forgetting to close the escrow ATA — leaves a rent-funded empty token account on-chain forever',
+          'Not using new_with_signer for the transfer CPI — listing PDA must sign the transfer from escrow',
+        ],
+        practicePrompt: 'Write a test: list NFT, cancel listing. Assert seller has NFT back, escrow ATA is gone, listing account is gone, seller balance increased (rent returned).',
+      }),
+      makeTask("p6w6d3", 6, 26, 3, "Execute Purchase (CPI to Token)", "Implement the buy instruction: pay seller, transfer NFT, split fees and royalties.", 4, "coding", { url: "https://developers.metaplex.com/", label: "Metaplex Docs", platform: "custom" }, {
+        keyPoints: [
+          'Buy flow: buyer pays price → split into: royalty (5%) + marketplace fee (2%) + seller proceeds',
+          'system_program::transfer for SOL payments from buyer to each recipient',
+          'NFT transfer: escrow_ata → buyer_ata, signed by listing PDA',
+          'Read royalty from metadata.data.seller_fee_basis_points',
+          'Close listing and escrow accounts after successful purchase',
+        ],
+        codeExample: `pub fn buy_nft(ctx: Context<BuyNft>) -> Result<()> {
+    let listing = &ctx.accounts.listing;
+    let price = listing.price;
+
+    // Read royalty from metadata
+    let metadata = Metadata::from_account_info(&ctx.accounts.metadata)?;
+    let royalty_bps = metadata.data.seller_fee_basis_points as u64;
+    let marketplace_fee_bps = ctx.accounts.marketplace_config.fee_bps;
+
+    let royalty_amount = price * royalty_bps / 10000;
+    let marketplace_fee = price * marketplace_fee_bps / 10000;
+    let seller_proceeds = price - royalty_amount - marketplace_fee;
+
+    // Transfer SOL: buyer -> creator (royalty)
+    system_program::transfer(
+        CpiContext::new(ctx.accounts.system_program.to_account_info(), Transfer {
+            from: ctx.accounts.buyer.to_account_info(),
+            to: ctx.accounts.creator.to_account_info(),
+        }),
+        royalty_amount,
+    )?;
+    // buyer -> marketplace treasury
+    // buyer -> seller
+    // Transfer NFT: escrow -> buyer_ata (using listing PDA signer)
+    // Close listing + escrow accounts
+    Ok(())
+}`,
+        commonMistakes: [
+          'Paying royalty from seller_proceeds instead of from total price — double-charges the seller',
+          'Not reading royalty from on-chain metadata — hardcoding royalty allows future metadata changes to be bypassed',
+        ],
+        practicePrompt: 'Write a test: list for 1 SOL, buy. Assert seller got ~0.93 SOL, creator got ~0.05, marketplace got ~0.02. Assert buyer has NFT and listing is closed.',
+      }),
+      makeTask("p6w6d4", 6, 26, 4, "Auction: English Auction Logic", "Implement an English (ascending price) auction with bidding and auto-extension.", 4, "coding", { url: "https://developers.metaplex.com/", label: "Metaplex Docs", platform: "custom" }, {
+        keyPoints: [
+          'Auction account: seller, mint, start_price, current_bid, highest_bidder, end_time',
+          'New bid must exceed current_bid by min_increment (e.g. 5%)',
+          'Auto-extension: if bid arrives within 10 minutes of end, extend end_time by 10 minutes',
+          'Previous bidder must be refunded immediately on each new bid',
+          'Settle auction: transfer NFT to winner, SOL to seller, close auction account',
+        ],
+        codeExample: `#[account]
+pub struct Auction {
+    pub seller: Pubkey,
+    pub mint: Pubkey,
+    pub start_price: u64,
+    pub current_bid: u64,
+    pub highest_bidder: Pubkey,
+    pub end_time: i64,
+    pub min_increment_bps: u64, // e.g. 500 = 5%
+    pub bump: u8,
+}
+
+pub fn place_bid(ctx: Context<PlaceBid>, amount: u64) -> Result<()> {
+    let auction = &mut ctx.accounts.auction;
+    let now = Clock::get()?.unix_timestamp;
+    require!(now < auction.end_time, ErrorCode::AuctionEnded);
+
+    let min_bid = auction.current_bid
+        + auction.current_bid * auction.min_increment_bps / 10000;
+    require!(amount >= min_bid, ErrorCode::BidTooLow);
+
+    // Auto-extend if within 10 minutes of end
+    if auction.end_time - now < 600 {
+        auction.end_time += 600;
+    }
+
+    // Refund previous bidder
+    if auction.current_bid > 0 {
+        **ctx.accounts.previous_bidder.try_borrow_mut_lamports()? +=
+            auction.current_bid;
+        **ctx.accounts.auction.to_account_info().try_borrow_mut_lamports()? -=
+            auction.current_bid;
+    }
+
+    auction.current_bid = amount;
+    auction.highest_bidder = ctx.accounts.bidder.key();
+    Ok(())
+}`,
+        commonMistakes: [
+          'Holding all bids in escrow simultaneously — requires tracking all bidders; immediate refund is simpler and safer',
+          'Not implementing anti-sniping (auto-extension) — auctions get sniped in the last second without it',
+        ],
+        practicePrompt: 'Write auction tests: (1) place bid, verify previous bidder refunded. (2) Bid within 10 min of end, verify end_time extended. (3) settle after end_time, verify winner gets NFT.',
+      }),
+      makeTask("p6w6d5", 6, 26, 5, "Bid & Cancel-Bid Instructions", "Implement offer/bid system where buyers bid on non-listed NFTs.", 4, "coding", { url: "https://developers.metaplex.com/", label: "Metaplex Docs", platform: "custom" }, {
+        keyPoints: [
+          'Offer = bid on any NFT regardless of listing status — stored in Offer PDA',
+          'Offer PDA: seeds = ["offer", buyer.key(), mint.key()]',
+          'SOL escrowed in Offer account when offer is placed',
+          'Cancel offer: close Offer PDA, return escrowed SOL to buyer',
+          'Accept offer: seller transfers NFT, buyer\'s escrow SOL released to seller',
+        ],
+        codeExample: `#[account]
+pub struct Offer {
+    pub buyer: Pubkey,
+    pub mint: Pubkey,
+    pub amount: u64,
+    pub expiry: i64,
+    pub bump: u8,
+}
+
+pub fn make_offer(ctx: Context<MakeOffer>, amount: u64, expiry: i64) -> Result<()> {
+    let offer = &mut ctx.accounts.offer;
+    offer.buyer = ctx.accounts.buyer.key();
+    offer.mint = ctx.accounts.mint.key();
+    offer.amount = amount;
+    offer.expiry = expiry;
+    offer.bump = ctx.bumps.offer;
+
+    // Escrow buyer's SOL into offer account (via lamport transfer)
+    let rent = Rent::get()?.minimum_balance(Offer::LEN);
+    **ctx.accounts.buyer.try_borrow_mut_lamports()? -= amount;
+    **ctx.accounts.offer.to_account_info().try_borrow_mut_lamports()? += amount;
+    Ok(())
+}
+
+pub fn cancel_offer(ctx: Context<CancelOffer>) -> Result<()> {
+    let offer = &ctx.accounts.offer;
+    require!(offer.buyer == ctx.accounts.buyer.key(), ErrorCode::Unauthorized);
+    // Anchor close = buyer returns lamports + rent
+    Ok(())
+}`,
+        commonMistakes: [
+          'Not checking offer expiry on accept — seller can accept a very old offer at the original price even if market moved',
+          'Storing SOL in a separate vault account instead of the Offer PDA itself — unnecessary complexity',
+        ],
+        practicePrompt: 'Implement accept_offer: verify NFT ownership, transfer NFT to buyer, pay seller from offer escrow (minus fees/royalties), close offer account.',
+      }),
+      makeTask("p6w6d6", 6, 26, 6, "Royalty Split on Sale", "Implement automatic royalty distribution to multiple creators on every sale.", 4, "coding", { url: "https://developers.metaplex.com/token-metadata", label: "Token Metadata Docs", platform: "custom" }, {
+        keyPoints: [
+          'Metaplex metadata.creators is Vec<Creator> with share (0-100, must sum to 100)',
+          'Verified creators: only those with verified=true should receive royalties',
+          'Compute each creator\'s cut: creator_amount = total_royalty * creator.share / 100',
+          'Require creator ATAs as remaining_accounts — iterate and transfer to each',
+          'If creator not verified, their share goes to the collection authority',
+        ],
+        codeExample: `pub fn distribute_royalties<'info>(
+    metadata_account: &AccountInfo<'info>,
+    remaining_accounts: &[AccountInfo<'info>],
+    total_royalty: u64,
+    system_program: &AccountInfo<'info>,
+    payer: &AccountInfo<'info>,
+) -> Result<()> {
+    let metadata = Metadata::from_account_info(metadata_account)?;
+    let creators = metadata.data.creators
+        .ok_or(error!(ErrorCode::NoCreators))?;
+
+    let verified_creators: Vec<_> = creators.iter()
+        .filter(|c| c.verified)
+        .collect();
+
+    let total_share: u8 = verified_creators.iter().map(|c| c.share).sum();
+
+    for creator in &verified_creators {
+        let amount = (total_royalty as u128)
+            .checked_mul(creator.share as u128).unwrap()
+            / total_share as u128;
+
+        // Find matching account in remaining_accounts
+        let creator_account = remaining_accounts.iter()
+            .find(|a| a.key() == creator.address)
+            .ok_or(error!(ErrorCode::MissingCreatorAccount))?;
+
+        system_program::transfer(
+            CpiContext::new(system_program.clone(), Transfer {
+                from: payer.clone(),
+                to: creator_account.clone(),
+            }),
+            amount as u64,
+        )?;
+    }
+    Ok(())
+}`,
+        commonMistakes: [
+          'Distributing royalties to unverified creators — they could be spoofed; only verified=true creators should receive',
+          'Not handling the case where total_share != 100 (some creators not verified) — leads to underpaying royalties',
+        ],
+        practicePrompt: 'Create an NFT with 2 creators: 70% and 30% shares. Sell for 1 SOL with 10% royalty. Assert creator1 gets 0.07 SOL and creator2 gets 0.03 SOL.',
+      }),
+      makeTask("p6w6d7", 6, 26, 7, "Marketplace Fee Collection", "Implement marketplace fee configuration, collection, and treasury management.", 4, "coding", { url: "https://developers.metaplex.com/", label: "Metaplex Docs", platform: "custom" }, {
+        keyPoints: [
+          'MarketplaceConfig PDA: fee_bps, treasury, authority, total_volume, total_fees',
+          'Authority can update fee_bps (bounded: 0-500 bps max, no rug-pull via fee change)',
+          'Track total_volume and total_fees for analytics and reporting',
+          'Allow sellers to delist expired listings in bulk (housekeeping instruction)',
+          'Emit SaleEvent with full details for indexers: buyer, seller, mint, price, fees',
+        ],
+        codeExample: `#[account]
+pub struct MarketplaceConfig {
+    pub authority: Pubkey,
+    pub treasury: Pubkey,
+    pub fee_bps: u64,         // marketplace fee, e.g. 200 = 2%
+    pub total_volume: u128,   // cumulative SOL traded
+    pub total_fees: u128,     // cumulative fees collected
+    pub bump: u8,
+}
+
+pub fn update_fee(ctx: Context<UpdateFee>, new_fee_bps: u64) -> Result<()> {
+    require!(new_fee_bps <= 500, ErrorCode::FeeTooHigh); // max 5%
+    require!(
+        ctx.accounts.authority.key() == ctx.accounts.config.authority,
+        ErrorCode::Unauthorized
+    );
+    ctx.accounts.config.fee_bps = new_fee_bps;
+    Ok(())
+}
+
+#[event]
+pub struct SaleEvent {
+    pub buyer: Pubkey,
+    pub seller: Pubkey,
+    pub mint: Pubkey,
+    pub price: u64,
+    pub royalty: u64,
+    pub marketplace_fee: u64,
+    pub seller_proceeds: u64,
+    pub timestamp: i64,
+}`,
+        commonMistakes: [
+          'Not capping fee_bps — authority could raise fees to 100% and take all sale proceeds',
+          'Not emitting SaleEvent — frontends and indexers cannot display transaction history without events',
+        ],
+        practicePrompt: 'Build a complete test: initialize marketplace config, list NFT, buy NFT, assert SaleEvent emitted with correct amounts, assert treasury balance increased by fee amount.',
+      }),
+    ],
+  },
+
+  // Week 27 — Security Auditing
+  {
+    weekNumber: 27,
+    phaseWeek: 7,
+    phaseId: 6,
+    title: "Security Auditing: Vulnerability Patterns",
+    goal: "Learn common Solana smart contract vulnerabilities and how to prevent them.",
+    isCompleted: false,
+    tasks: [
+      makeTask("p6w7d1", 6, 27, 1, "Owner Checks & Account Validation", "Understand account owner spoofing attacks and how Anchor prevents them.", 4, "reading", { url: "https://github.com/coral-xyz/sealevel-attacks", label: "Sealevel Attacks Reference", platform: "github" }, {
+        keyPoints: [
+          'Solana does not enforce that an account passed to your program is the type you expect',
+          'Account owner: account.owner must equal the program ID that created it',
+          'Anchor\'s Account<\'info, T> deserializer checks the discriminator (8-byte prefix)',
+          'UncheckedAccount (AccountInfo) bypasses all checks — use only when required',
+          'AccountLoader<\'info, T> for zero-copy large accounts also checks owner',
+        ],
+        codeExample: `// VULNERABLE: no owner check
+pub fn vulnerable_withdraw(ctx: Context<VulnerableWithdraw>) -> Result<()> {
+    let user_data = UserData::try_from_slice(&ctx.accounts.user_data.data.borrow())?;
+    // attacker passes a crafted account with same layout but different owner
+    transfer_tokens(&user_data.amount)?;
+    Ok(())
+}
+
+// SECURE: Anchor Account<> checks owner + discriminator
+#[derive(Accounts)]
+pub struct SecureWithdraw<'info> {
+    #[account(
+        has_one = owner,   // checks user_data.owner == owner.key()
+        constraint = user_data.balance >= amount @ ErrorCode::InsufficientBalance
+    )]
+    pub user_data: Account<'info, UserData>,  // ✓ Anchor checks: owner == program_id
+    pub owner: Signer<'info>,                 // ✓ must sign
+}
+
+// Manual owner check when using AccountInfo directly:
+pub fn check_account_owner(account: &AccountInfo, expected_owner: &Pubkey) -> Result<()> {
+    require!(
+        account.owner == expected_owner,
+        ErrorCode::InvalidAccountOwner
+    );
+    Ok(())
+}`,
+        commonMistakes: [
+          'Using AccountInfo directly without checking .owner — an attacker can forge any layout',
+          'Trusting account data without Anchor deserialization — discriminator check prevents type confusion',
+        ],
+        practicePrompt: 'Find the Sealevel Attacks repository, clone it, and run the "owner check" attack example. Document what the attack does and how the fix prevents it.',
+      }),
+      makeTask("p6w7d2", 6, 27, 2, "Signer Authorization Patterns", "Master signer checks to prevent unauthorized instruction execution.", 4, "reading", { url: "https://github.com/coral-xyz/sealevel-attacks", label: "Sealevel Attacks", platform: "github" }, {
+        keyPoints: [
+          'Signer<\'info> in Anchor context ensures is_signer == true for the account',
+          'has_one constraint: checks that a stored pubkey matches the signer',
+          'Privilege escalation: never derive admin authority from user-controlled input',
+          'Program-signed CPIs: use invoke_signed with PDA seeds, not user-provided authority',
+          'Multi-sig authority: require M-of-N signers using a dedicated multisig account',
+        ],
+        codeExample: `// VULNERABLE: missing signer check on authority
+#[derive(Accounts)]
+pub struct VulnerableAdminAction<'info> {
+    pub config: Account<'info, Config>,
+    pub authority: AccountInfo<'info>,  // ← NOT a Signer — anyone can pass any pubkey
+}
+
+// SECURE: enforce signer and has_one
+#[derive(Accounts)]
+pub struct SecureAdminAction<'info> {
+    #[account(
+        mut,
+        has_one = authority @ ErrorCode::Unauthorized
+    )]
+    pub config: Account<'info, Config>,
+    pub authority: Signer<'info>,   // ✓ must sign the transaction
+}
+
+// SECURE: PDA authority (program-signed, no user key needed)
+pub fn program_signed_cpi(ctx: Context<ProgramSigned>) -> Result<()> {
+    let seeds = &[b"vault-authority", &[ctx.accounts.config.vault_bump]];
+    token::transfer(
+        CpiContext::new_with_signer(
+            ctx.accounts.token_program.to_account_info(),
+            Transfer { from: ctx.accounts.vault.to_account_info(), /* ... */ },
+            &[seeds],
+        ),
+        ctx.accounts.vault.amount,
+    )?;
+    Ok(())
+}`,
+        commonMistakes: [
+          'Using AccountInfo instead of Signer<\'info> for admin accounts — is_signer is never checked',
+          'Checking authority pubkey but not signer flag: require!(ctx.accounts.authority.key() == config.authority) is NOT enough without Signer<>',
+        ],
+        practicePrompt: 'Write a vulnerable program with a missing signer check. Write an exploit test that calls it with a non-signer authority. Then add the fix and verify the exploit fails.',
+      }),
+      makeTask("p6w7d3", 6, 27, 3, "PDA Seed Manipulation Attacks", "Understand and prevent PDA seed collision and bump manipulation attacks.", 4, "reading", { url: "https://github.com/coral-xyz/sealevel-attacks", label: "Sealevel Attacks", platform: "github" }, {
+        keyPoints: [
+          'PDA bump grinding: attacker could find seeds that collide with a valid PDA',
+          'Canonical bump: always use find_program_address (not create_program_address) — returns canonical bump',
+          'Store the bump and verify: seeds = [...known seeds..., &[stored_bump]] in constraints',
+          'Seed uniqueness: include user pubkey in seeds to prevent cross-user PDA sharing',
+          'PDA account closing: close to system_program (not user) to prevent re-initialization',
+        ],
+        codeExample: `// VULNERABLE: not storing bump, recomputing each time
+pub fn vulnerable_transfer(ctx: Context<VulnerableTransfer>) -> Result<()> {
+    // find_program_address is expensive (O(255) hash attempts)
+    // and an attacker could front-run with a different bump
+    let (_, _bump) = Pubkey::find_program_address(
+        &[b"user-vault", ctx.accounts.user.key().as_ref()],
+        ctx.program_id,
+    );
+    // ...
+    Ok(())
+}
+
+// SECURE: store bump in account, verify in constraint
+#[account]
+pub struct UserVault {
+    pub owner: Pubkey,
+    pub bump: u8,  // store canonical bump
+}
+
+#[derive(Accounts)]
+pub struct SecureTransfer<'info> {
+    #[account(
+        mut,
+        seeds = [b"user-vault", user.key().as_ref()],
+        bump = vault.bump,  // ✓ verifies stored canonical bump
+        has_one = owner @ ErrorCode::Unauthorized,
+    )]
+    pub vault: Account<'info, UserVault>,
+    pub owner: Signer<'info>,
+    pub user: AccountInfo<'info>,
+}`,
+        commonMistakes: [
+          'Not storing the canonical bump — recomputation is expensive (wastes CUs) and can use non-canonical bump',
+          'Using same PDA seeds for different account types — two programs with same seeds produce same PDA, causing confusion',
+        ],
+        practicePrompt: 'Write a program with unsafe bump usage. Create an exploit test. Fix it by storing bump in account struct and using bump = account.bump constraint.',
+      }),
+      makeTask("p6w7d4", 6, 27, 4, "Integer Overflow/Underflow Prevention", "Audit all arithmetic operations for overflow vulnerabilities and fix them.", 4, "coding", { url: "https://github.com/coral-xyz/sealevel-attacks", label: "Sealevel Attacks", platform: "github" }, {
+        keyPoints: [
+          'In Rust release builds, overflow wraps (u64 wraps at u64::MAX + 1 → 0)',
+          'checked_add/sub/mul/div: returns Option<T> — require! on None',
+          'saturating_add/sub: clamps at min/max — safe for counters, wrong for financial math',
+          'Solana\'s u64 max: 18,446,744,073,709,551,615 (18.4 quintillion lamports = 18.4B SOL)',
+          'Use u128 for intermediate calculations that multiply two u64 values',
+        ],
+        codeExample: `// VULNERABLE: silent overflow in release build
+pub fn vulnerable_deposit(pool: &mut Pool, amount: u64) -> Result<()> {
+    pool.total_deposits += amount;  // WRAPS in release mode!
+    Ok(())
+}
+
+// SECURE: checked arithmetic
+pub fn secure_deposit(pool: &mut Pool, amount: u64) -> Result<()> {
+    pool.total_deposits = pool.total_deposits
+        .checked_add(amount)
+        .ok_or(error!(ErrorCode::Overflow))?;
+    Ok(())
+}
+
+// SECURE: u128 for intermediate mul
+pub fn secure_fee_calc(amount: u64, fee_bps: u64) -> Result<u64> {
+    let fee = (amount as u128)
+        .checked_mul(fee_bps as u128)
+        .ok_or(error!(ErrorCode::Overflow))?
+        .checked_div(10000)
+        .ok_or(error!(ErrorCode::DivisionByZero))?;
+    u64::try_from(fee).map_err(|_| error!(ErrorCode::Overflow))
+}
+
+// VULNERABLE: underflow
+pub fn vulnerable_withdraw(pool: &mut Pool, amount: u64) -> Result<()> {
+    pool.total_deposits -= amount;  // PANIC in debug, WRAP in release
+    Ok(())
+}
+
+// SECURE: require before subtract
+pub fn secure_withdraw(pool: &mut Pool, amount: u64) -> Result<()> {
+    require!(pool.total_deposits >= amount, ErrorCode::InsufficientFunds);
+    pool.total_deposits -= amount; // safe: checked above
+    Ok(())
+}`,
+        commonMistakes: [
+          'Testing only in debug mode — overflow panics in debug but silently wraps in release (where you deploy)',
+          'Using saturating_sub for financial math — balance.saturating_sub(1_000_000_000) returns 0 if balance is 0, hiding a bug',
+        ],
+        practicePrompt: 'Audit your AMM or Lending program: search for every arithmetic operation. Replace all with checked_ variants. Run cargo test -- --release to test in release mode.',
+      }),
+      makeTask("p6w7d5", 6, 27, 5, "Reentrancy in Multi-Instruction Transactions", "Understand Solana\'s account locking and how multi-instruction attacks work.", 4, "reading", { url: "https://github.com/coral-xyz/sealevel-attacks", label: "Sealevel Attacks", platform: "github" }, {
+        keyPoints: [
+          'Solana prevents traditional reentrancy: same account cannot be locked twice in one instruction',
+          'Multi-instruction reentrancy: instruction 1 modifies state, instruction 2 in same tx exploits stale state',
+          'Check-effects-interactions pattern: update state BEFORE making CPI calls',
+          'Cross-program reentrancy: program A calls B, B calls A — still possible',
+          'load_instruction_at_checked: inspect other instructions in tx to detect malicious composition',
+        ],
+        codeExample: `// VULNERABLE: state update AFTER CPI (classic reentrancy order)
+pub fn vulnerable_withdraw(ctx: Context<Withdraw>, amount: u64) -> Result<()> {
+    // 1. Transfer first (effects before checks)
+    token::transfer(cpi_ctx, amount)?;
+    // 2. Update state AFTER — if reentered, old balance is still there
+    ctx.accounts.user.balance -= amount;  // ← too late
+    Ok(())
+}
+
+// SECURE: Check-Effects-Interactions pattern
+pub fn secure_withdraw(ctx: Context<Withdraw>, amount: u64) -> Result<()> {
+    let user = &mut ctx.accounts.user;
+    // 1. CHECK: verify precondition
+    require!(user.balance >= amount, ErrorCode::InsufficientBalance);
+    // 2. EFFECTS: update state FIRST
+    user.balance = user.balance.checked_sub(amount)
+        .ok_or(ErrorCode::Underflow)?;
+    // 3. INTERACTIONS: CPI after state is committed
+    token::transfer(
+        CpiContext::new(ctx.accounts.token_program.to_account_info(), Transfer {
+            from: ctx.accounts.vault.to_account_info(),
+            to: ctx.accounts.user_wallet.to_account_info(),
+            authority: ctx.accounts.vault_authority.to_account_info(),
+        }),
+        amount,
+    )?;
+    Ok(())
+}`,
+        commonMistakes: [
+          'Assuming Solana is immune to reentrancy — multi-CPI reentrancy is real and has been exploited',
+          'Not following Check-Effects-Interactions order — always update state before making external calls',
+        ],
+        practicePrompt: 'Write a multi-CPI reentrancy example program. Document the attack flow. Add the CEI fix and verify the attack path fails.',
+      }),
+      makeTask("p6w7d6", 6, 27, 6, "Anchor Constraint Audit Checklist", "Systematically audit Anchor #[derive(Accounts)] structs for missing constraints.", 4, "exercise", { url: "https://docs.coral-xyz.com/", label: "Anchor Docs", platform: "docs" }, {
+        keyPoints: [
+          'Every account needs: mut (if modified), owner check (via Account<>), signer check (if required)',
+          'Relationship constraints: has_one validates foreign keys in account structs',
+          'PDA constraints: seeds + bump must always be specified on PDA accounts',
+          'Initialization guard: init_if_needed requires careful re-initialization attack analysis',
+          'Remaining accounts: cannot use Anchor macros — must validate every account manually',
+        ],
+        codeExample: `// AUDIT TEMPLATE: go through each field systematically
+
+#[derive(Accounts)]
+pub struct AuditedInstruction<'info> {
+    // ✓ mut: needs modification
+    // ✓ seeds + bump: PDA verified
+    // ✓ has_one = authority: checks stored authority matches signer
+    // ✓ constraint: custom business logic
+    #[account(
+        mut,
+        seeds = [b"pool", pool.token_a_mint.as_ref()],
+        bump = pool.bump,
+        has_one = authority @ ErrorCode::Unauthorized,
+        constraint = pool.total_deposits > 0 @ ErrorCode::EmptyPool
+    )]
+    pub pool: Account<'info, Pool>,
+
+    // ✓ Signer: must sign transaction
+    pub authority: Signer<'info>,
+
+    // ✓ mut + specific vault: not just any token account
+    #[account(
+        mut,
+        address = pool.token_a_vault @ ErrorCode::WrongVault  // exact address check
+    )]
+    pub vault: Account<'info, TokenAccount>,
+
+    // ✓ Program IDs verified by Anchor type system
+    pub token_program: Program<'info, Token>,
+    pub system_program: Program<'info, System>,
+}
+
+// Remaining accounts pattern (for variable-length royalty recipients):
+pub fn validate_remaining_accounts(
+    remaining_accounts: &[AccountInfo],
+    expected_owners: &[Pubkey],
+) -> Result<()> {
+    for (account, expected) in remaining_accounts.iter().zip(expected_owners) {
+        require!(account.key() == expected, ErrorCode::UnexpectedAccount);
+        require!(account.is_writable, ErrorCode::AccountNotWritable);
+    }
+    Ok(())
+}`,
+        commonMistakes: [
+          'Using address = config.authority for a Signer — address check alone does not verify signing; use has_one + Signer<>',
+          'Skipping audit of remaining_accounts — every manually validated account is a potential vulnerability',
+        ],
+        practicePrompt: 'Pick your most complex instruction from this phase. Write a security audit report: list every account, its constraints, and whether each constraint is necessary and sufficient.',
+      }),
+      makeTask("p6w7d7", 6, 27, 7, "Full Program Audit Walkthrough", "Conduct a structured security audit of your Phase 6 programs.", 4, "exercise", { url: "https://www.sec3.dev/blog/how-to-audit-solana-smart-contracts-part-1", label: "sec3 — Solana Security Audit Guide", platform: "custom" }, {
+        keyPoints: [
+          'Use cargo-audit to check dependencies for known CVEs',
+          'Run anchor build --verifiable for reproducible builds',
+          'Automated tools: Soteria, xray (Anchor-specific linter), cargo clippy',
+          'Manual review: focus on account validation, arithmetic, CPI targets, and access control',
+          'Write a threat model: who are the adversaries, what do they want, what can they do?',
+        ],
+        codeExample: `# Security audit workflow for Solana programs
+
+# 1. Dependency audit
+cargo audit
+
+# 2. Lint with clippy (all warnings are potential bugs)
+cargo clippy -- -D warnings
+
+# 3. Check for common patterns with grep
+grep -r "unchecked" programs/ --include="*.rs"
+grep -r "AccountInfo" programs/ --include="*.rs" | grep -v "//.*AccountInfo"
+grep -r "invoke(" programs/ --include="*.rs"  # manual CPI without program check
+grep -r "+=" programs/ --include="*.rs"        # potential unchecked addition
+grep -r "-=" programs/ --include="*.rs"        # potential unchecked subtraction
+
+# 4. Build in release mode and test
+cargo test --release
+
+# 5. Review each instruction against checklist:
+# [ ] Account owner checks
+# [ ] Signer authorization
+# [ ] PDA bump stored and verified
+# [ ] All arithmetic uses checked_ operations
+# [ ] CEI order in every instruction
+# [ ] No arbitrary CPI targets
+# [ ] No init_if_needed without re-init protection`,
+        commonMistakes: [
+          'Auditing only business logic while ignoring dependency vulnerabilities — cargo audit catches known CVEs in crates',
+          'Not testing exploit paths explicitly — document each vulnerability type and write a test that exploits the unfixed version',
+        ],
+        practicePrompt: 'Run the full audit checklist on your AMM or Lending protocol. Document every finding. Fix all HIGH severity issues. Write exploit tests for each vulnerability you found.',
+      }),
+    ],
+  },
+
+  // Week 28 — Production Hardening
+  {
+    weekNumber: 28,
+    phaseWeek: 8,
+    phaseId: 6,
+    title: "Production Hardening & Phase 6 Capstone",
+    goal: "Harden your programs for production and build a full DeFi protocol.",
+    isCompleted: false,
+    tasks: [
+      makeTask("p6w8d1", 6, 28, 1, "Upgrade Authority Best Practices", "Design a secure upgrade strategy using program upgrade authority and timelocks.", 4, "coding", { url: "https://solana.com/developers", label: "Solana Developers", platform: "docs" }, {
+        keyPoints: [
+          'Programs are upgradeable by default — upgrade_authority can deploy new code',
+          'Immutable option: solana program set-upgrade-authority --final (irreversible)',
+          'Multisig upgrade authority: use Squads Protocol or SPL Governance',
+          'Timelock upgrades: propose upgrade, wait 48h, then execute — gives community time to react',
+          'Buffer account: stage new code to buffer before committing to reduce downtime',
+        ],
+        codeExample: `// Upgrade authority management with Squads Protocol
+// This is TypeScript for the CLI, not Anchor program code
+
+import { Multisig } from "@sqds/multisig";
+
+// 1. Create multisig (3-of-5 threshold)
+const [multisigPda] = Multisig.pdas.multisig({ programId: SQUADS_PROGRAM_ID });
+
+// 2. Transfer upgrade authority to multisig PDA
+// $ solana program set-upgrade-authority <PROGRAM_ID> --new-upgrade-authority <MULTISIG_PDA>
+
+// 3. To upgrade: create proposal
+const txIndex = await Multisig.rpc.proposalCreate({ ... });
+
+// 4. Collect 3 approvals from 5 signers
+await Multisig.rpc.proposalApprove({ multisigPda, transactionIndex: txIndex, member: signer1 });
+
+// 5. Execute after threshold met
+await Multisig.rpc.vaultTransactionExecute({ ... });
+
+// Timelock pattern: store proposal with execute_at = now + 48 * 3600
+// All multisig members see the proposed code before it goes live`,
+        commonMistakes: [
+          'Keeping upgrade authority as a single hot wallet — one compromised key = protocol takeover',
+          'Upgrading without a timelock — users and integrators need time to review and exit if they disagree',
+        ],
+        practicePrompt: 'Set up a 2-of-3 Squads multisig on devnet. Transfer your test program\'s upgrade authority to it. Deploy an upgrade and walk through the approval process.',
+      }),
+      makeTask("p6w8d2", 6, 28, 2, "Multi-sig for Admin Actions", "Implement on-chain governance for protocol parameters using multisig voting.", 4, "coding", { url: "https://solana.com/developers", label: "Solana Developers", platform: "docs" }, {
+        keyPoints: [
+          'Admin actions: fee changes, pause, oracle changes, adding collateral types',
+          'SPL Governance: full-featured DAO with token-weighted voting',
+          'Simple multisig: M-of-N Pubkeys stored in a Config account, requires N signatures',
+          'Timelock: admin proposals have mandatory delay before execution',
+          'Emit ProposalCreated/Approved/Executed events for transparency',
+        ],
+        codeExample: `#[account]
+pub struct Multisig {
+    pub owners: Vec<Pubkey>,        // up to 10 signers
+    pub threshold: u8,              // M of N required
+    pub nonce: u64,                 // prevent replay
+    pub bump: u8,
+}
+
+#[account]
+pub struct Proposal {
+    pub multisig: Pubkey,
+    pub instruction_data: Vec<u8>, // serialized instruction
+    pub approvals: Vec<Pubkey>,    // who has approved
+    pub executed: bool,
+    pub created_at: i64,
+    pub execute_after: i64,        // timelock
+    pub bump: u8,
+}
+
+pub fn approve_proposal(ctx: Context<ApproveProposal>) -> Result<()> {
+    let proposal = &mut ctx.accounts.proposal;
+    let multisig = &ctx.accounts.multisig;
+
+    require!(!proposal.executed, ErrorCode::AlreadyExecuted);
+    require!(
+        multisig.owners.contains(&ctx.accounts.approver.key()),
+        ErrorCode::NotMultisigOwner
+    );
+    require!(
+        !proposal.approvals.contains(&ctx.accounts.approver.key()),
+        ErrorCode::AlreadyApproved
+    );
+    proposal.approvals.push(ctx.accounts.approver.key());
+    Ok(())
+}
+
+pub fn execute_proposal(ctx: Context<ExecuteProposal>) -> Result<()> {
+    let proposal = &ctx.accounts.proposal;
+    let multisig = &ctx.accounts.multisig;
+    require!(
+        proposal.approvals.len() >= multisig.threshold as usize,
+        ErrorCode::InsufficientApprovals
+    );
+    require!(
+        Clock::get()?.unix_timestamp >= proposal.execute_after,
+        ErrorCode::TimelockNotExpired
+    );
+    // execute the stored instruction via CPI
+    Ok(())
+}`,
+        commonMistakes: [
+          'Not checking for duplicate approvals — same owner could approve multiple times to reach threshold alone',
+          'No timelock on execute — proposals should have mandatory delay for community review',
+        ],
+        practicePrompt: 'Implement a 3-key multisig with timelock for updating lending protocol fee. Write test: create proposal, get 3 approvals, wait for timelock, execute. Assert fee changed.',
+      }),
+      makeTask("p6w8d3", 6, 28, 3, "Compute Unit Budget Optimization", "Profile and optimize Solana program compute unit consumption.", 4, "coding", { url: "https://solana.com/docs/programs/limitations", label: "Solana Program Limitations", platform: "docs" }, {
+        keyPoints: [
+          'Default CU budget: 200,000 per instruction. Max: 1,400,000 per transaction',
+          'Request higher budget: ComputeBudgetInstruction::set_compute_unit_limit(budget)',
+          'Set priority fee: ComputeBudgetInstruction::set_compute_unit_price(micro_lamports)',
+          'CU costs: deserialization ~1000 CUs, hash ~100 CUs, CPI ~1000 CUs base',
+          'Use msg!() sparingly — logging is expensive; remove debug logs before production',
+        ],
+        codeExample: `// Client: request more CU and set priority fee
+use solana_sdk::compute_budget::ComputeBudgetInstruction;
+
+let budget_ix = ComputeBudgetInstruction::set_compute_unit_limit(400_000);
+let priority_ix = ComputeBudgetInstruction::set_compute_unit_price(1000); // micro-lamports per CU
+
+let tx = Transaction::new_signed_with_payer(
+    &[budget_ix, priority_ix, your_instruction],
+    Some(&payer.pubkey()),
+    &[&payer],
+    recent_blockhash,
+);
+
+// Program: measure CU usage
+// Add to instruction handler:
+let start_cu = sol_remaining_compute_units();
+// ... do work ...
+let used_cu = start_cu - sol_remaining_compute_units();
+msg!("Used {} CUs", used_cu);  // only in devnet builds
+
+// Optimization tips:
+// 1. Load accounts in order of use (reduces cache misses)
+// 2. Use zero-copy (AccountLoader) for large accounts
+// 3. Minimize CPI depth (each CPI costs ~1000 CUs)
+// 4. Pre-compute PDAs client-side (pass as accounts instead of re-deriving)
+// 5. Remove msg!() and unused accounts in production`,
+        commonMistakes: [
+          'Not setting compute budget for complex instructions — default 200k fails for programs with multiple CPIs',
+          'Leaving debug msg!() calls in production — each log costs CUs and reveals internals',
+        ],
+        practicePrompt: 'Measure CU usage of your swap instruction by adding sol_remaining_compute_units() logs. Optimize: remove debug logs, reorder account access. Target < 50k CUs for simple swap.',
+      }),
+      makeTask("p6w8d4", 6, 28, 4, "Error Handling & Logging", "Design a comprehensive error taxonomy and structured logging strategy.", 4, "coding", { url: "https://solana.com/developers", label: "Solana Developers", platform: "docs" }, {
+        keyPoints: [
+          'Anchor error codes start at 6000 — use descriptive names with documentation',
+          'Categorize errors: validation (wrong input), authorization (wrong signer), state (wrong state)',
+          'Include error context: ErrorCode::InsufficientFunds.with_message("balance: {bal}")',
+          'Client-side: parse anchor error codes from transaction logs to show user-friendly messages',
+          'Structured events: prefer #[event] over msg!() for production monitoring',
+        ],
+        codeExample: `use anchor_lang::prelude::*;
+
+#[error_code]
+pub enum ErrorCode {
+    // Validation errors (6000-6099)
+    #[msg("Amount must be greater than zero")]
+    ZeroAmount,
+    #[msg("Amount exceeds maximum allowed")]
+    AmountTooLarge,
+
+    // Authorization errors (6100-6199)
+    #[msg("Signer is not authorized to perform this action")]
+    Unauthorized,
+    #[msg("Account owner does not match expected program")]
+    InvalidAccountOwner,
+
+    // State errors (6200-6299)
+    #[msg("Pool is currently paused")]
+    PoolPaused,
+    #[msg("Insufficient liquidity in pool")]
+    InsufficientLiquidity,
+    #[msg("Slippage tolerance exceeded")]
+    SlippageTooHigh,
+
+    // Math errors (6300-6399)
+    #[msg("Arithmetic overflow")]
+    Overflow,
+    #[msg("Arithmetic underflow")]
+    Underflow,
+    #[msg("Division by zero")]
+    DivisionByZero,
+}
+
+// Structured event logging (preferred over msg!())
+#[event]
+pub struct SwapEvent {
+    pub user: Pubkey,
+    pub amount_in: u64,
+    pub amount_out: u64,
+    pub fee: u64,
+    pub pool: Pubkey,
+    pub slot: u64,
+}`,
+        commonMistakes: [
+          'Using panic!() or unwrap() in program code — always returns a generic error; use require!() with ErrorCode',
+          'Generic error codes like ErrorCode::Err — makes debugging impossible; always use descriptive names',
+        ],
+        practicePrompt: 'Audit your Phase 6 programs: replace every unwrap() with checked operations + ErrorCode. Replace all msg!() with #[event] structs. Count the events your AMM emits per swap.',
+      }),
+      makeTask("p6w8d5", 6, 28, 5, "Devnet Deployment & Testing", "Deploy your DeFi suite to devnet and run live integration tests.", 4, "coding", { url: "https://www.anchor-lang.com/docs/deployment", label: "Anchor Deployment", platform: "docs" }, {
+        keyPoints: [
+          'anchor build --verifiable creates a reproducible build for source verification',
+          'anchor deploy deploys to the cluster in Anchor.toml (devnet/mainnet)',
+          'solana program show <PROGRAM_ID> confirms deployment and displays upgrade authority',
+          'Test on devnet with real Switchboard/Pyth oracle accounts (use devnet addresses)',
+          'solana logs -c devnet | grep <PROGRAM_ID> streams live program logs',
+        ],
+        codeExample: `# Anchor.toml for devnet deployment
+[programs.devnet]
+amm = "YourProgramIdHere..."
+lending = "YourLendingProgramId..."
+
+[registry]
+url = "https://api.apr.dev"
+
+[provider]
+cluster = "devnet"
+wallet = "~/.config/solana/id.json"
+
+# Deployment commands
+anchor build --verifiable     # reproducible build
+anchor deploy                 # deploy to configured cluster
+
+# Verify deployment
+solana program show <PROGRAM_ID> --url devnet
+
+# Stream program logs
+solana logs --url devnet | grep "Program YourProgramId"
+
+# Run tests against devnet (slow but real)
+ANCHOR_PROVIDER_URL=https://api.devnet.solana.com \\
+ANCHOR_WALLET=~/.config/solana/id.json \\
+anchor test --skip-local-validator`,
+        commonMistakes: [
+          'Deploying without checking upgrade authority — ensure it is set to your multisig, not the deployer wallet',
+          'Not testing with real oracle feeds — devnet Pyth accounts exist and should be used for realistic testing',
+        ],
+        practicePrompt: 'Deploy your AMM program to devnet. Create a pool with devnet USDC and SOL. Execute a real swap transaction and verify on Solana Explorer.',
+      }),
+      makeTask("p6w8d6", 6, 28, 6, "Mainnet Readiness Checklist", "Complete a pre-mainnet checklist: security, performance, monitoring, and documentation.", 4, "exercise", { url: "https://solana.com/developers", label: "Solana Developers", platform: "docs" }, {
+        keyPoints: [
+          'Security: external audit from Ottersec, Neodyme, or Trail of Bits',
+          'Performance: all instructions < 200k CU in the happy path',
+          'Monitoring: Grafana dashboard tracking TVL, volume, health factors',
+          'Documentation: public docs covering all instructions, error codes, and account structures',
+          'Bug bounty: Immunefi listing with responsible disclosure process',
+        ],
+        codeExample: `# Mainnet readiness checklist
+
+## Security
+- [ ] External audit completed and all H/M findings resolved
+- [ ] Bug bounty program live (Immunefi or HackerOne)
+- [ ] Upgrade authority set to 3-of-5 multisig with timelock
+- [ ] Emergency pause mechanism tested and keys held by 3 different people
+- [ ] All accounts use canonical PDAs with stored bumps
+
+## Performance
+- [ ] All instructions measured < 200k CU (happy path)
+- [ ] ComputeBudget set correctly in client SDK
+- [ ] No debug logs in production build
+
+## Monitoring
+- [ ] Helius webhook for all program events
+- [ ] Grafana dashboard: TVL, 24h volume, active borrows
+- [ ] PagerDuty alert if TVL drops > 20% in 1 hour
+
+## Documentation
+- [ ] All instructions documented with parameter types and constraints
+- [ ] Error codes documented with common causes and solutions
+- [ ] Integration guide for developers building on top of your protocol`,
+        commonMistakes: [
+          'Skipping external audit for a "small" protocol — exploits do not discriminate by TVL; new protocols are prime targets',
+          'Launching without monitoring — you need to detect exploits in progress, not after the fact',
+        ],
+        practicePrompt: 'Complete the mainnet checklist for your Phase 6 AMM. For any unchecked item, write a 1-sentence explanation of the risk it mitigates and your plan to address it before mainnet.',
+      }),
+      makeTask("p6w8d7", 6, 28, 7, "Phase 6 Capstone: Full DeFi Suite Deploy", "Deploy and demo your complete Phase 6 DeFi suite: AMM + Lending + NFT Marketplace.", 4, "project", { url: "https://solana.com/developers", label: "Solana Developers", platform: "docs" }, {
+        keyPoints: [
+          'Deploy all three programs to devnet with correct cross-program references',
+          'Create demo script: initialize pools, add liquidity, borrow, list NFT, sell NFT',
+          'Write a 1-page architecture diagram showing how the three programs interact',
+          'Record a 3-minute demo video for your portfolio',
+          'Write GitHub README with: overview, architecture, instructions, deployed addresses',
+        ],
+        codeExample: `// Demo script: full DeFi suite interaction
+import { Connection, PublicKey, Keypair } from "@solana/web3.js";
+import { AmmClient, LendingClient, MarketplaceClient } from "./clients";
+
+async function runDemo() {
+    const connection = new Connection("https://api.devnet.solana.com");
+
+    // 1. Initialize AMM pool
+    const amm = new AmmClient(connection, AMM_PROGRAM_ID);
+    const poolPda = await amm.initializePool(tokenA, tokenB, 30); // 0.30% fee
+    await amm.addLiquidity(poolPda, 1000_000, 50000_000);
+    console.log("Pool initialized:", poolPda.toString());
+
+    // 2. Execute a swap
+    const swapResult = await amm.swap(poolPda, tokenA, 100_000, 0);
+    console.log("Swapped:", swapResult.amountOut, "token B received");
+
+    // 3. Deposit to lending and borrow
+    const lending = new LendingClient(connection, LENDING_PROGRAM_ID);
+    await lending.deposit(usdcPool, 500_000);
+    await lending.borrow(solPool, 50_000); // borrow 50 SOL against USDC
+    console.log("Borrowed 50 SOL against USDC collateral");
+
+    // 4. Mint and list NFT
+    const marketplace = new MarketplaceClient(connection, MARKETPLACE_PROGRAM_ID);
+    const nftMint = await marketplace.mintNft("Ardan DeFi Expert #1", "ADE", ipfsUri);
+    await marketplace.listNft(nftMint, 1_000_000_000); // 1 SOL
+    console.log("NFT listed:", nftMint.toString());
+}`,
+        commonMistakes: [
+          'Building the demo script at the end without testing each client individually — integration bugs are much harder to debug',
+          'Not recording the demo video — future employers and investors want to see working software',
+        ],
+        practicePrompt: 'Complete the full demo script. Deploy all programs to devnet. Share devnet transaction signatures. Commit everything to GitHub with a polished README including architecture diagram.',
+      }),
+    ],
+  },
 ]
 
 // ─── Phase 7: 10 Solana Projects (Weeks 29–32) ────────────────────────────────
